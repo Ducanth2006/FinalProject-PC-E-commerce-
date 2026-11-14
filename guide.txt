@@ -1,0 +1,2 @@
+be chạy : npm run start:dev
+docker chạy : docker compose up , docker compose ls để kiểm tra 
