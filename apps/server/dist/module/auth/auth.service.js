@@ -125,6 +125,10 @@ let AuthService = AuthService_1 = class AuthService {
             },
         };
     }
+    async logOut(userId) {
+        await this.userService.updateRefeshTokenKey(userId, null);
+        return { message: "Log out successfully " };
+    }
 };
 exports.AuthService = AuthService;
 exports.AuthService = AuthService = AuthService_1 = __decorate([

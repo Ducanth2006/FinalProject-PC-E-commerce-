@@ -18,6 +18,7 @@ import { LoginDto } from "./dto/login.dto";
 import { ApiBearerAuth } from "@nestjs/swagger";
 import { JwtRefreshAuthGuard } from "./guard/jwt-refresh-auth.guard";
 import { RequestDto } from "./dto/Request.dto";
+import { JwtAuthGuard } from "./guard/jwt-auth.guard";
 
 @Controller("auth")
 export class AuthController {
@@ -36,5 +37,12 @@ export class AuthController {
       req.user.userId,
       req.user.refreshToken,
     );
+  }
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
+  @Post("/logout")
+  @HttpCode(HttpStatus.OK)
+  logout(@Req() req: any) {
+    return this.authService.logOut(req.user.userId);
   }
 }

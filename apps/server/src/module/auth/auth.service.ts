@@ -92,4 +92,8 @@ export class AuthService {
       },
     };
   }
+  async logOut(userId: string) {
+    await this.userService.updateRefeshTokenKey(userId, null);
+    return { message: "Log out successfully " };
+  }
 }

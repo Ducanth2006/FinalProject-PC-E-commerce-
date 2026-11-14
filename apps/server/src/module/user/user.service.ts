@@ -90,7 +90,7 @@ export class UserService {
       .andWhere("user.isActive = :active", { active: true })
       .getOne();
   }
-  async updateRefeshTokenKey(id: string, refreshToken: string) {
+  async updateRefeshTokenKey(id: string, refreshToken: string|null) {
     let refreshTokenHash = null;
     if (refreshToken) {
       refreshTokenHash = await bcrypt.hash(refreshToken, 10);

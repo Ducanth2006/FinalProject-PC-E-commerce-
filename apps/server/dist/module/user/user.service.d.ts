@@ -9,7 +9,7 @@ export declare class UserService {
     constructor(repoUser: Repository<User>);
     create(createUserDto: CreateUserDto): Promise<UserResponseDto>;
     findByEmailAndPassword(email: string): Promise<User | null>;
-    updateRefeshTokenKey(id: string, refreshToken: string): Promise<import("typeorm").UpdateResult>;
+    updateRefeshTokenKey(id: string, refreshToken: string | null): Promise<import("typeorm").UpdateResult>;
     findOneWithRefreshTokenKey(id: string): Promise<User | null>;
     findAll(): string;
     findOne(id: string): Promise<User | null>;

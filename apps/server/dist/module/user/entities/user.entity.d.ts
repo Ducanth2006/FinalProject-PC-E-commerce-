@@ -1,6 +1,6 @@
 import { Role } from "../../roles/entities/role.entity";
-import { UserGender } from '../enums/gender.enum';
-import { UserStatus } from '../enums/user-status.enum';
+import { UserGender } from "../enums/gender.enum";
+import { UserStatus } from "../enums/user-status.enum";
 import { MetaDataEntity } from "../../../common/entity/metaData.entity";
 export declare class User extends MetaDataEntity {
     id: string;
@@ -17,4 +17,5 @@ export declare class User extends MetaDataEntity {
     dateOfBirth: Date | null;
     status: UserStatus;
     lastLoginAt: Date | null;
+    version: number;
 }

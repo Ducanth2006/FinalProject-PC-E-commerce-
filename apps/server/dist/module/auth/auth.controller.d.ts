@@ -21,4 +21,7 @@ export declare class AuthController {
             roleId: string;
         };
     }>;
+    logout(req: any): Promise<{
+        message: string;
+    }>;
 }

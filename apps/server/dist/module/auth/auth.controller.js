@@ -18,6 +18,7 @@ const auth_service_1 = require("./auth.service");
 const login_dto_1 = require("./dto/login.dto");
 const swagger_1 = require("@nestjs/swagger");
 const jwt_refresh_auth_guard_1 = require("./guard/jwt-refresh-auth.guard");
+const jwt_auth_guard_1 = require("./guard/jwt-auth.guard");
 let AuthController = class AuthController {
     authService;
     constructor(authService) {
@@ -28,6 +29,9 @@ let AuthController = class AuthController {
     }
     refresh(req) {
         return this.authService.refreshTokens(req.user.userId, req.user.refreshToken);
+    }
+    logout(req) {
+        return this.authService.logOut(req.user.userId);
     }
 };
 exports.AuthController = AuthController;
@@ -49,6 +53,16 @@ __decorate([
     __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", void 0)
 ], AuthController.prototype, "refresh", null);
+__decorate([
+    (0, swagger_1.ApiBearerAuth)(),
+    (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard),
+    (0, common_1.Post)("/logout"),
+    (0, common_1.HttpCode)(common_1.HttpStatus.OK),
+    __param(0, (0, common_1.Req)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", void 0)
+], AuthController.prototype, "logout", null);
 exports.AuthController = AuthController = __decorate([
     (0, common_1.Controller)("auth"),
     __metadata("design:paramtypes", [auth_service_1.AuthService])

@@ -27,4 +27,7 @@ export declare class AuthService {
             roleId: string;
         };
     }>;
+    logOut(userId: string): Promise<{
+        message: string;
+    }>;
 }
