@@ -18,4 +18,13 @@ export declare class AuthService {
             roleId: string;
         };
     }>;
+    refreshTokens(userId: string, oldRefreshToken: string): Promise<{
+        AccessToken: string;
+        RefreshToken: string;
+        user: {
+            id: string;
+            email: string | null;
+            roleId: string;
+        };
+    }>;
 }

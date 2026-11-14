@@ -14,6 +14,7 @@ import * as bcrypt from "bcrypt";
 import { plainToInstance } from "class-transformer";
 import { UserResponseDto } from "./dto/response-user.dto";
 import { JwtAuthGuard } from "../auth/guard/jwt-auth.guard";
+import { isUUID } from "class-validator";
 @Injectable()
 export class UserService {
   private readonly logger = new Logger(UserService.name);
@@ -100,6 +101,17 @@ export class UserService {
       .set({ refreshTokenHash })
       .andWhere("id =:id and is_active = :isActive", { id, isActive: true })
       .execute();
+  }
+  async findOneWithRefreshTokenKey(id: string) {
+    if (!isUUID(id)) {
+      throw new BadRequestException("Your ID does not match the UUID format.");
+    }
+    return await this.repoUser
+      .createQueryBuilder("user")
+      .select(["user.id", "user.email", "user.roleId", "user.refreshTokenHash"])
+      .where("user.id= :id", { id })
+      .andWhere("user.isActive =:active", { active: true })
+      .getOne();
   }
 
   findAll() {

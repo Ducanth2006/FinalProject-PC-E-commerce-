@@ -54,6 +54,7 @@ const typeorm_2 = require("typeorm");
 const bcrypt = __importStar(require("bcrypt"));
 const class_transformer_1 = require("class-transformer");
 const response_user_dto_1 = require("./dto/response-user.dto");
+const class_validator_1 = require("class-validator");
 let UserService = UserService_1 = class UserService {
     repoUser;
     logger = new common_1.Logger(UserService_1.name);
@@ -134,6 +135,17 @@ let UserService = UserService_1 = class UserService {
             .set({ refreshTokenHash })
             .andWhere("id =:id and is_active = :isActive", { id, isActive: true })
             .execute();
+    }
+    async findOneWithRefreshTokenKey(id) {
+        if (!(0, class_validator_1.isUUID)(id)) {
+            throw new common_1.BadRequestException("Your ID does not match the UUID format.");
+        }
+        return await this.repoUser
+            .createQueryBuilder("user")
+            .select(["user.id", "user.email", "user.roleId", "user.refreshTokenHash"])
+            .where("user.id= :id", { id })
+            .andWhere("user.isActive =:active", { active: true })
+            .getOne();
     }
     findAll() {
         return `This action returns all user`;

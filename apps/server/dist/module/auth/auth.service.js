@@ -97,6 +97,34 @@ let AuthService = AuthService_1 = class AuthService {
             },
         };
     }
+    async refreshTokens(userId, oldRefreshToken) {
+        const user = await this.userService.findOneWithRefreshTokenKey(userId);
+        if (!user || !user.refreshTokenHash) {
+            throw new common_1.UnauthorizedException("Your access is denied");
+        }
+        const isMatching = await bcrypt.compare(oldRefreshToken, user.refreshTokenHash);
+        if (!isMatching) {
+            throw new common_1.UnauthorizedException("Refresh token isn't validate");
+        }
+        const payload = { sub: user.id, email: user.email, roleId: user.roleId };
+        const [AccessToken, RefreshToken] = await Promise.all([
+            this.jwtService.signAsync(payload),
+            this.jwtService.signAsync(payload, {
+                secret: this.jwtConfiguration.refreshSecret,
+                expiresIn: this.jwtConfiguration.refreshExpireIn,
+            }),
+        ]);
+        await this.userService.updateRefeshTokenKey(userId, RefreshToken);
+        return {
+            AccessToken,
+            RefreshToken,
+            user: {
+                id: user.id,
+                email: user.email,
+                roleId: user.roleId,
+            },
+        };
+    }
 };
 exports.AuthService = AuthService;
 exports.AuthService = AuthService = AuthService_1 = __decorate([

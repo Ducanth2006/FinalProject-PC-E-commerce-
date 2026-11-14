@@ -59,4 +59,37 @@ export class AuthService {
       },
     };
   }
+  async refreshTokens(userId: string, oldRefreshToken: string) {
+    const user = await this.userService.findOneWithRefreshTokenKey(userId);
+    // Check user exist
+    if (!user || !user.refreshTokenHash) {
+      throw new UnauthorizedException("Your access is denied");
+    }
+    // Compare token key
+    const isMatching = await bcrypt.compare(
+      oldRefreshToken,
+      user.refreshTokenHash,
+    );
+    if (!isMatching) {
+      throw new UnauthorizedException("Refresh token isn't validate");
+    }
+    const payload = { sub: user.id, email: user.email, roleId: user.roleId };
+    const [AccessToken, RefreshToken] = await Promise.all([
+      this.jwtService.signAsync(payload),
+      this.jwtService.signAsync(payload, {
+        secret: this.jwtConfiguration.refreshSecret,
+        expiresIn: this.jwtConfiguration.refreshExpireIn as any,
+      }),
+    ]);
+    await this.userService.updateRefeshTokenKey(userId, RefreshToken);
+    return {
+      AccessToken,
+      RefreshToken,
+      user: {
+        id: user.id,
+        email: user.email,
+        roleId: user.roleId,
+      },
+    };
+  }
 }
