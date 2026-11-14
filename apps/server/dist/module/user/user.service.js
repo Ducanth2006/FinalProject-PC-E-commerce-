@@ -97,6 +97,7 @@ let UserService = UserService_1 = class UserService {
             dateOfBirth: row.date_of_birth,
             status: row.status,
             lastLoginAt: row.last_login_at,
+            version: row.version,
             isActive: row.is_active,
             createdAt: row.created_at,
             createdBy: row.created_by,

@@ -1,23 +1,16 @@
 import {
   Controller,
-  Get,
   Post,
   Body,
-  Patch,
-  Param,
-  Delete,
   HttpCode,
   HttpStatus,
   UseGuards,
   Req,
 } from "@nestjs/common";
 import { AuthService } from "./auth.service";
-import { CreateAuthDto } from "./dto/create-auth.dto";
-import { UpdateAuthDto } from "./dto/update-auth.dto";
 import { LoginDto } from "./dto/login.dto";
 import { ApiBearerAuth } from "@nestjs/swagger";
 import { JwtRefreshAuthGuard } from "./guard/jwt-refresh-auth.guard";
-import { RequestDto } from "./dto/Request.dto";
 import { JwtAuthGuard } from "./guard/jwt-auth.guard";
 
 @Controller("auth")

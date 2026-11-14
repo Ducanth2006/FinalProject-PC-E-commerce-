@@ -1,5 +1,12 @@
 # AGENTS.md
 
+## User collaboration rules
+
+- Follow the user's instructions exactly and make only the changes they explicitly request.
+- Do not independently add features, refactor, optimize, or otherwise enhance code beyond the requested scope.
+- If an additional change may be useful, do not implement it automatically. Present it only as an optional suggestion, rate its necessity from 1 to 5 stars (5 = most necessary), and let the user decide.
+- Keep explanations focused on helping the user understand and control their own code. Proceed step by step when asked.
+
 ## NestJS
 
 This app's version of NestJS is likely newer than what you know. https://docs.nestjs.com/llms.txt indexes its documentation, with a markdown page per chapter.

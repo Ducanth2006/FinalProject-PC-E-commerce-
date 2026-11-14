@@ -60,6 +60,7 @@ export class UserService {
       dateOfBirth: row.date_of_birth,
       status: row.status,
       lastLoginAt: row.last_login_at,
+      version: row.version,
 
       // Metadata fields
       isActive: row.is_active,
@@ -90,7 +91,7 @@ export class UserService {
       .andWhere("user.isActive = :active", { active: true })
       .getOne();
   }
-  async updateRefeshTokenKey(id: string, refreshToken: string|null) {
+  async updateRefeshTokenKey(id: string, refreshToken: string | null) {
     let refreshTokenHash = null;
     if (refreshToken) {
       refreshTokenHash = await bcrypt.hash(refreshToken, 10);
