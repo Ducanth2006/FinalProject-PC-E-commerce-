@@ -17,18 +17,17 @@ export class CreateUserAddressDto {
   @IsUUID()
   userId: string;
 
-  @ApiPropertyOptional({
+  @ApiProperty({
     description: 'Province ID as a positive integer.',
     example: '1',
     type: String,
-    nullable: true,
   })
-  @IsOptional()
+  @IsDefined()
   @IsString()
   @Matches(/^[1-9]\d*$/, {
     message: 'provinceId must be a positive integer string',
   })
-  provinceId?: string | null;
+  provinceId: string;
 
   @ApiPropertyOptional({
     description: 'Ward ID as a positive integer.',
@@ -58,6 +57,7 @@ export class CreateUserAddressDto {
     default: false,
   })
  
+  @IsOptional()
   @IsBoolean()
-  isDefault = false;
+  isDefault?: boolean;
 }

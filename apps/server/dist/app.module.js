@@ -17,6 +17,9 @@ const typeorm_naming_strategies_1 = require("typeorm-naming-strategies");
 const user_module_1 = require("./module/user/user.module");
 const auth_module_1 = require("./module/auth/auth.module");
 const config_1 = require("@nestjs/config");
+const province_module_1 = require("./module/province/province.module");
+const ward_module_1 = require("./module/ward/ward.module");
+const user_address_module_1 = require("./module/user-address/user-address.module");
 const jwt_config_1 = __importDefault(require("./config/jwt.config"));
 let AppModule = class AppModule {
 };
@@ -42,6 +45,9 @@ exports.AppModule = AppModule = __decorate([
             roles_module_1.RolesModule,
             user_module_1.UserModule,
             auth_module_1.AuthModule,
+            province_module_1.ProvinceModule,
+            ward_module_1.WardModule,
+            user_address_module_1.UserAddressModule,
         ],
     })
 ], AppModule);

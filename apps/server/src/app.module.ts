@@ -7,6 +7,7 @@ import { AuthModule } from "./module/auth/auth.module";
 import { ConfigModule } from "@nestjs/config";
 import { ProvinceModule } from '@/module/province/province.module';
 import { WardModule } from '@/module/ward/ward.module';
+import { UserAddressModule } from '@/module/user-address/user-address.module';
 import jwtConfig from "./config/jwt.config";
 @Module({
   imports: [
@@ -30,6 +31,7 @@ import jwtConfig from "./config/jwt.config";
     AuthModule,
     ProvinceModule,
     WardModule,
+    UserAddressModule,
   ],
 })
 export class AppModule {}

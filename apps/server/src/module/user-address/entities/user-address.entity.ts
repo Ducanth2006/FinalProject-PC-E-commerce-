@@ -12,6 +12,10 @@ import {
 } from 'typeorm';
 
 @Entity('user_addresses')
+@Index('uq_user_addresses_one_default', ['userId'], {
+  unique: true,
+  where: '"is_default" = true',
+})
 @Index(
   'idx_user_addresses_checkout',
   ['userId', 'isDefault', 'isActive'],
@@ -27,12 +31,12 @@ export class UserAddress extends MetaDataEntity {
   @JoinColumn({ name: 'user_id' })
   user: User;
 
-  @Column({ type: 'bigint', nullable: true })
-  provinceId: string | null;
+  @Column({ type: 'bigint', nullable: false })
+  provinceId: string;
 
-  @ManyToOne(() => Province, { nullable: true })
+  @ManyToOne(() => Province, { nullable: false })
   @JoinColumn({ name: 'province_id' })
-  province: Province | null;
+  province: Province;
 
   @Column({ type: 'bigint', nullable: true })
   wardId: string | null;
