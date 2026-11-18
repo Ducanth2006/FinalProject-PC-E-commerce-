@@ -42,7 +42,7 @@ export class User extends MetaDataEntity {
     type: "varchar",
     length: 20,
     enum: UserStatus,
-    default: UserStatus.PENDING,
+    default: UserStatus.ACTIVE,
   })
   status: UserStatus;
   @Column({ type: "timestamptz", nullable: true })

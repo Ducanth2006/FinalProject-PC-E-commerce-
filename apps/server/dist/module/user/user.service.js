@@ -55,6 +55,8 @@ const bcrypt = __importStar(require("bcrypt"));
 const class_transformer_1 = require("class-transformer");
 const response_user_dto_1 = require("./dto/response-user.dto");
 const class_validator_1 = require("class-validator");
+const user_status_enum_1 = require("./enums/user-status.enum");
+const roles_enum_1 = require("../roles/enums/roles.enum");
 let UserService = UserService_1 = class UserService {
     repoUser;
     logger = new common_1.Logger(UserService_1.name);
@@ -66,24 +68,24 @@ let UserService = UserService_1 = class UserService {
         if (createUserDto.email) {
             const isExistingEmail = await this.repoUser
                 .createQueryBuilder()
-                .where("email =:email and is_Active =:active", { email, active: true })
+                .where('email =:email and is_Active =:active', { email, active: true })
                 .getOne();
             if (isExistingEmail) {
-                throw new common_1.ConflictException("Email is existing please using another mail");
+                throw new common_1.ConflictException('Email is existing please using another mail');
             }
         }
         if (!password) {
-            throw new common_1.BadRequestException("Password must be required");
+            throw new common_1.BadRequestException('Password must be required');
         }
         const passwordHash = await bcrypt.hash(password, 10);
-        const fullName = email.split("@")[0];
+        const fullName = email.split('@')[0];
         const user = { ...createUserDto, passwordHash, fullName };
         const result = await this.repoUser
             .createQueryBuilder()
             .insert()
             .into(user_entity_1.User)
             .values(user)
-            .returning("*")
+            .returning('*')
             .execute();
         const mappedUsers = result.raw.map((row) => ({
             id: row.id,
@@ -112,17 +114,17 @@ let UserService = UserService_1 = class UserService {
     }
     async findByEmailAndPassword(email) {
         return await this.repoUser
-            .createQueryBuilder("user")
+            .createQueryBuilder('user')
             .select([
-            "user.id",
-            "user.email",
-            "user.fullName",
-            "user.passwordHash",
-            "user.roleId",
-            "user.status",
+            'user.id',
+            'user.email',
+            'user.fullName',
+            'user.passwordHash',
+            'user.roleId',
+            'user.status',
         ])
-            .where("user.email = :email", { email })
-            .andWhere("user.isActive = :active", { active: true })
+            .where('user.email = :email', { email })
+            .andWhere('user.isActive = :active', { active: true })
             .getOne();
     }
     async updateRefeshTokenKey(id, refreshToken) {
@@ -134,35 +136,127 @@ let UserService = UserService_1 = class UserService {
             .createQueryBuilder()
             .update(user_entity_1.User)
             .set({ refreshTokenHash })
-            .andWhere("id =:id and is_active = :isActive", { id, isActive: true })
+            .andWhere('id =:id and is_active = :isActive and status=:status', { id, isActive: true, status: user_status_enum_1.UserStatus.ACTIVE })
             .execute();
     }
     async findOneWithRefreshTokenKey(id) {
         if (!(0, class_validator_1.isUUID)(id)) {
-            throw new common_1.BadRequestException("Your ID does not match the UUID format.");
+            throw new common_1.BadRequestException('Your ID does not match the UUID format.');
         }
         return await this.repoUser
-            .createQueryBuilder("user")
-            .select(["user.id", "user.email", "user.roleId", "user.refreshTokenHash"])
-            .where("user.id= :id", { id })
-            .andWhere("user.isActive =:active", { active: true })
+            .createQueryBuilder('user')
+            .select(['user.id', 'user.email', 'user.roleId', 'user.refreshTokenHash'])
+            .where('user.id= :id', { id })
+            .andWhere('user.isActive =:active and user.status =:status', { active: true, status: user_status_enum_1.UserStatus.ACTIVE })
             .getOne();
     }
-    findAll() {
-        return `This action returns all user`;
+    async findAll({ page = 1, search, role, gender, status }) {
+        if (!Number.isSafeInteger(page) || page < 1 || page > 214748365) {
+            throw new common_1.BadRequestException('page must be a positive integer');
+        }
+        const query = this.repoUser.createQueryBuilder('user')
+            .where('user.isActive = :active', { active: true });
+        const term = search?.trim();
+        if (term) {
+            const escaped = term.replace(/[\\%_]/g, '\\$&');
+            query.andWhere(new typeorm_2.Brackets((qb) => {
+                qb.where('user.email ILIKE :search', { search: `%${escaped}%` })
+                    .orWhere('user.phoneNumber ILIKE :search')
+                    .orWhere('user.fullName ILIKE :search');
+            }));
+        }
+        if (role)
+            query.andWhere('user.roleId = :role', { role });
+        if (gender)
+            query.andWhere('user.gender = :gender', { gender });
+        if (status)
+            query.andWhere("user.status =:status", { status });
+        const [users, total] = await query.orderBy('user.createdAt', 'DESC')
+            .addOrderBy('user.id', 'DESC').skip((page - 1) * 10).take(10).getManyAndCount();
+        return {
+            data: (0, class_transformer_1.plainToInstance)(response_user_dto_1.UserResponseDto, users, { excludeExtraneousValues: true }),
+            total, page, totalPages: Math.ceil(total / 10),
+        };
     }
     async findOne(id) {
         return await this.repoUser
             .createQueryBuilder()
             .where({ id })
-            .andWhere("is_active=:is_active", { is_active: true })
+            .andWhere('is_active=:is_active and status=:status', { is_active: true, status: user_status_enum_1.UserStatus.ACTIVE })
             .getOne();
+    }
+    async findOneForClient(id, userId) {
+        if (id !== userId)
+            throw new common_1.NotFoundException('User not found');
+        const user = await this.repoUser.findOne({ where: { id, isActive: true, status: user_status_enum_1.UserStatus.ACTIVE } });
+        if (!user)
+            throw new common_1.NotFoundException('User not found');
+        return (0, class_transformer_1.plainToInstance)(response_user_dto_1.UserResponseDto, user, {
+            excludeExtraneousValues: true,
+        });
+    }
+    async updateClientProfile(userId, dto) {
+        if (dto.email === null)
+            throw new common_1.BadRequestException('Email cannot be null');
+        const user = await this.repoUser.findOne({
+            where: { id: userId, isActive: true, status: user_status_enum_1.UserStatus.ACTIVE },
+        });
+        if (!user)
+            throw new common_1.NotFoundException('User not found');
+        if (dto.email !== undefined && dto.email !== user.email) {
+            const existing = await this.repoUser.findOne({
+                where: { email: dto.email, id: (0, typeorm_2.Not)(userId) },
+                withDeleted: true,
+            });
+            if (existing)
+                throw new common_1.ConflictException('Email is already in use');
+        }
+        if (dto.phoneNumber != null && dto.phoneNumber !== user.phoneNumber) {
+            const existing = await this.repoUser.findOne({
+                where: { phoneNumber: dto.phoneNumber, id: (0, typeorm_2.Not)(userId) },
+                withDeleted: true,
+            });
+            if (existing)
+                throw new common_1.ConflictException('Phone number is already in use');
+        }
+        const { email, phoneNumber, fullName, avatarUrl, gender, dateOfBirth } = dto;
+        const updated = this.repoUser.create({
+            ...user,
+            ...(email !== undefined && { email }),
+            ...(phoneNumber !== undefined && { phoneNumber }),
+            ...(fullName !== undefined && { fullName }),
+            ...(avatarUrl !== undefined && { avatarUrl }),
+            ...(gender !== undefined && { gender }),
+            ...(dateOfBirth !== undefined && {
+                dateOfBirth: dateOfBirth === null
+                    ? null
+                    : new Date(`${dateOfBirth}T00:00:00.000Z`),
+            }),
+            updatedBy: userId,
+        });
+        try {
+            const saved = await this.repoUser.save(updated);
+            return (0, class_transformer_1.plainToInstance)(response_user_dto_1.UserResponseDto, saved, {
+                excludeExtraneousValues: true,
+            });
+        }
+        catch (error) {
+            if (error &&
+                typeof error === 'object' &&
+                'code' in error &&
+                error.code === '23505') {
+                throw new common_1.ConflictException('Email or phone number is already in use');
+            }
+            throw error;
+        }
     }
     update(id, updateUserDto) {
         return `This action updates a #${id} user`;
     }
-    remove(id) {
-        return `This action removes a #${id} user`;
+    async remove(userId) {
+        const result = await this.repoUser.update({ id: userId, roleId: roles_enum_1.roleEnum.CLIENT, isActive: true, deletedAt: (0, typeorm_2.IsNull)() }, { isActive: false, deletedAt: () => 'CURRENT_TIMESTAMP', deletedBy: userId, updatedBy: userId, refreshTokenHash: null });
+        if (!result.affected)
+            throw new common_1.NotFoundException('Account not found or already deleted');
     }
 };
 exports.UserService = UserService;

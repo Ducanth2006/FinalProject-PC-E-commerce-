@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Inject,
   Injectable,
   Logger,
@@ -13,6 +14,7 @@ import { JwtService } from "@nestjs/jwt";
 import { LoginDto } from "./dto/login.dto";
 import { emit } from "process";
 import jwtConfig from "@/config/jwt.config";
+import { UserStatus } from "../user/enums/user-status.enum";
 
 @Injectable()
 export class AuthService {
@@ -29,6 +31,7 @@ export class AuthService {
       throw new BadRequestException("Missing email or password");
     }
     const user = await this.userService.findByEmailAndPassword(data.email);
+    
     if (!user || !user.passwordHash) {
       throw new UnauthorizedException("Email or passwordHash isn't correct");
     }
@@ -39,6 +42,10 @@ export class AuthService {
     if (!isPasswordCorrect) {
       throw new UnauthorizedException("Password isn't correct");
     }
+    if(user.status=== UserStatus.BLOCKED ){
+      throw new ForbiddenException({code:"403", message:"Your account is blocked by admin"})
+    }
+    
     const payload = { sub: user.id, email: user.email, roleId: user.roleId };
     this.logger.log(payload);
     const [AccessToken, RefreshToken] = await Promise.all([

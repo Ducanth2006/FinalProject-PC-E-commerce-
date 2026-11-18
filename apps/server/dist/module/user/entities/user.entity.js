@@ -88,7 +88,7 @@ __decorate([
         type: "varchar",
         length: 20,
         enum: user_status_enum_1.UserStatus,
-        default: user_status_enum_1.UserStatus.PENDING,
+        default: user_status_enum_1.UserStatus.ACTIVE,
     }),
     __metadata("design:type", String)
 ], User.prototype, "status", void 0);

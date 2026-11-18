@@ -55,6 +55,7 @@ const bcrypt = __importStar(require("bcrypt"));
 const user_service_1 = require("../user/user.service");
 const jwt_1 = require("@nestjs/jwt");
 const jwt_config_1 = __importDefault(require("../../config/jwt.config"));
+const user_status_enum_1 = require("../user/enums/user-status.enum");
 let AuthService = AuthService_1 = class AuthService {
     userService;
     jwtService;
@@ -76,6 +77,9 @@ let AuthService = AuthService_1 = class AuthService {
         const isPasswordCorrect = await bcrypt.compare(data.password, user.passwordHash);
         if (!isPasswordCorrect) {
             throw new common_1.UnauthorizedException("Password isn't correct");
+        }
+        if (user.status === user_status_enum_1.UserStatus.BLOCKED) {
+            throw new common_1.ForbiddenException({ code: "403", message: "Your account is blocked by admin" });
         }
         const payload = { sub: user.id, email: user.email, roleId: user.roleId };
         this.logger.log(payload);

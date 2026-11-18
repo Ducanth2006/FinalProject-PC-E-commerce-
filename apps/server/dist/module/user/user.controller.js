@@ -16,6 +16,15 @@ exports.UserController = void 0;
 const common_1 = require("@nestjs/common");
 const user_service_1 = require("./user.service");
 const create_user_dto_1 = require("./dto/create-user.dto");
+const jwt_auth_guard_1 = require("../auth/guard/jwt-auth.guard");
+const swagger_1 = require("@nestjs/swagger");
+const update_client_profile_dto_1 = require("./dto/update-client-profile.dto");
+const response_user_dto_1 = require("./dto/response-user.dto");
+const find_users_dto_1 = require("./dto/find-users.dto");
+const paginated_user_dto_1 = require("./dto/paginated-user.dto");
+const roles_guard_1 = require("../../common/guard/roles.guard");
+const roles_decorator_1 = require("../../common/decorators/roles.decorator");
+const roles_enum_1 = require("../roles/enums/roles.enum");
 let UserController = class UserController {
     userService;
     constructor(userService) {
@@ -24,22 +33,27 @@ let UserController = class UserController {
     create(createUserDto) {
         return this.userService.create(createUserDto);
     }
-    findAll() {
-        return this.userService.findAll();
+    findAll(query) {
+        return this.userService.findAll(query);
     }
-    findOne(id) {
-        return this.userService.findOne(id);
+    findOneForClient(id, req) {
+        return this.userService.findOneForClient(id, req.user.userId);
     }
-    update(id, updateUserDto) {
-        return this.userService.update(+id, updateUserDto);
+    updateClientProfile(req, dto) {
+        return this.userService.updateClientProfile(req.user.userId, dto);
     }
-    remove(id) {
-        return this.userService.remove(+id);
+    remove(req) {
+        return this.userService.remove(req.user.userId);
     }
 };
 exports.UserController = UserController;
 __decorate([
     (0, common_1.Post)(),
+    (0, swagger_1.ApiOperation)({ summary: 'Create a user' }),
+    (0, swagger_1.ApiBody)({ type: create_user_dto_1.CreateUserDto }),
+    (0, swagger_1.ApiResponse)({ status: 201, description: 'User created successfully.', type: response_user_dto_1.UserResponseDto }),
+    (0, swagger_1.ApiResponse)({ status: 400, description: 'Invalid user data.' }),
+    (0, swagger_1.ApiResponse)({ status: 409, description: 'Email is already in use.' }),
     __param(0, (0, common_1.Body)()),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [create_user_dto_1.CreateUserDto]),
@@ -47,30 +61,66 @@ __decorate([
 ], UserController.prototype, "create", null);
 __decorate([
     (0, common_1.Get)(),
+    (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard, roles_guard_1.RolesGuard),
+    (0, roles_decorator_1.Roles)(roles_enum_1.roleEnum.ADMIN),
+    (0, swagger_1.ApiBearerAuth)(),
+    (0, swagger_1.ApiOperation)({ summary: 'List and search users as an administrator (10 per page)' }),
+    (0, swagger_1.ApiResponse)({ status: 200, type: paginated_user_dto_1.PaginatedUserDto }),
+    (0, swagger_1.ApiResponse)({ status: 400, description: 'Invalid search or filter parameters.' }),
+    (0, swagger_1.ApiResponse)({ status: 401, description: 'Missing or invalid access token.' }),
+    (0, swagger_1.ApiResponse)({ status: 403, description: 'Administrator role required.' }),
+    __param(0, (0, common_1.Query)(new common_1.ValidationPipe({ transform: true, whitelist: true }))),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", []),
+    __metadata("design:paramtypes", [find_users_dto_1.FindUsersDto]),
     __metadata("design:returntype", void 0)
 ], UserController.prototype, "findAll", null);
 __decorate([
     (0, common_1.Get)(":id"),
+    (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard),
+    (0, swagger_1.ApiBearerAuth)(),
+    (0, swagger_1.ApiOperation)({ summary: 'Find a user by ID' }),
+    (0, swagger_1.ApiParam)({ name: 'id', format: 'uuid' }),
+    (0, swagger_1.ApiResponse)({ status: 200, description: 'User found.', type: response_user_dto_1.UserResponseDto }),
+    (0, swagger_1.ApiResponse)({ status: 400, description: 'Invalid user ID.' }),
+    (0, swagger_1.ApiResponse)({ status: 401, description: 'Missing or invalid access token.' }),
+    (0, swagger_1.ApiResponse)({ status: 404, description: 'User not found.' }),
     __param(0, (0, common_1.Param)("id", common_1.ParseUUIDPipe)),
+    __param(1, (0, common_1.Req)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String]),
+    __metadata("design:paramtypes", [String, Object]),
     __metadata("design:returntype", void 0)
-], UserController.prototype, "findOne", null);
+], UserController.prototype, "findOneForClient", null);
 __decorate([
-    (0, common_1.Patch)(":id"),
-    __param(0, (0, common_1.Param)("id")),
+    (0, common_1.Patch)("me"),
+    (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard),
+    (0, swagger_1.ApiBearerAuth)(),
+    (0, swagger_1.ApiOperation)({ summary: 'Update the authenticated user profile' }),
+    (0, swagger_1.ApiBody)({ type: update_client_profile_dto_1.UpdateClientProfileDto }),
+    (0, swagger_1.ApiResponse)({ status: 200, description: 'Profile updated successfully.', type: response_user_dto_1.UserResponseDto }),
+    (0, swagger_1.ApiResponse)({ status: 400, description: 'Invalid profile data.' }),
+    (0, swagger_1.ApiResponse)({ status: 401, description: 'Missing or invalid access token.' }),
+    (0, swagger_1.ApiResponse)({ status: 404, description: 'User not found.' }),
+    (0, swagger_1.ApiResponse)({ status: 409, description: 'Email or phone number is already in use.' }),
+    __param(0, (0, common_1.Req)()),
     __param(1, (0, common_1.Body)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String, String]),
+    __metadata("design:paramtypes", [Object, update_client_profile_dto_1.UpdateClientProfileDto]),
     __metadata("design:returntype", void 0)
-], UserController.prototype, "update", null);
+], UserController.prototype, "updateClientProfile", null);
 __decorate([
-    (0, common_1.Delete)(":id"),
-    __param(0, (0, common_1.Param)("id")),
+    (0, common_1.Delete)('me'),
+    (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard, roles_guard_1.RolesGuard),
+    (0, roles_decorator_1.Roles)(roles_enum_1.roleEnum.CLIENT),
+    (0, swagger_1.ApiBearerAuth)(),
+    (0, common_1.HttpCode)(common_1.HttpStatus.NO_CONTENT),
+    (0, swagger_1.ApiOperation)({ summary: 'Delete the authenticated client account' }),
+    (0, swagger_1.ApiResponse)({ status: 204, description: 'Account deleted successfully.' }),
+    (0, swagger_1.ApiResponse)({ status: 401, description: 'Missing or invalid access token.' }),
+    (0, swagger_1.ApiResponse)({ status: 403, description: 'Client role required.' }),
+    (0, swagger_1.ApiResponse)({ status: 404, description: 'Account not found or already deleted.' }),
+    __param(0, (0, common_1.Req)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String]),
+    __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", void 0)
 ], UserController.prototype, "remove", null);
 exports.UserController = UserController = __decorate([
