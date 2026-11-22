@@ -9,6 +9,10 @@ import { ProvinceModule } from '@/module/province/province.module';
 import { WardModule } from '@/module/ward/ward.module';
 import { UserAddressModule } from '@/module/user-address/user-address.module';
 import jwtConfig from "./config/jwt.config";
+import { BrandsModule } from './module/catalog/brands/brands.module';
+import { CategoriesModule } from './module/catalog/categories/categories.module';
+import { ProductsModule } from './module/catalog/products/products.module';
+import { PcBundleComponentsModule } from './module/pc-bundle-components/pc-bundle-components.module';
 @Module({
   imports: [
     ConfigModule.forRoot({
@@ -32,6 +36,10 @@ import jwtConfig from "./config/jwt.config";
     ProvinceModule,
     WardModule,
     UserAddressModule,
+    BrandsModule,
+    CategoriesModule,
+    ProductsModule,
+    PcBundleComponentsModule,
   ],
 })
 export class AppModule {}

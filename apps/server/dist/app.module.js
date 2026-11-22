@@ -21,6 +21,10 @@ const province_module_1 = require("./module/province/province.module");
 const ward_module_1 = require("./module/ward/ward.module");
 const user_address_module_1 = require("./module/user-address/user-address.module");
 const jwt_config_1 = __importDefault(require("./config/jwt.config"));
+const brands_module_1 = require("./module/catalog/brands/brands.module");
+const categories_module_1 = require("./module/catalog/categories/categories.module");
+const products_module_1 = require("./module/catalog/products/products.module");
+const pc_bundle_components_module_1 = require("./module/pc-bundle-components/pc-bundle-components.module");
 let AppModule = class AppModule {
 };
 exports.AppModule = AppModule;
@@ -48,6 +52,10 @@ exports.AppModule = AppModule = __decorate([
             province_module_1.ProvinceModule,
             ward_module_1.WardModule,
             user_address_module_1.UserAddressModule,
+            brands_module_1.BrandsModule,
+            categories_module_1.CategoriesModule,
+            products_module_1.ProductsModule,
+            pc_bundle_components_module_1.PcBundleComponentsModule,
         ],
     })
 ], AppModule);
