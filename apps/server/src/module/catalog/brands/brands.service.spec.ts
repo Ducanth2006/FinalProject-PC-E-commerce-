@@ -2,6 +2,9 @@ import { BadRequestException, ConflictException, ForbiddenException, NotFoundExc
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { BrandsService } from './brands.service';
 import { UserStatus } from '@/module/user/enums/user-status.enum';
+import { validate } from 'class-validator';
+import { plainToInstance } from 'class-transformer';
+import { CreateBrandsBulkDto } from './dto/create-brands-bulk.dto';
 
 describe('BrandsService.create', () => {
   const brands = { create: vi.fn((value) => value), save: vi.fn() };
@@ -104,12 +107,20 @@ describe('BrandsService.findOneById', () => {
 });
 
 describe('BrandsService.findAll', () => {
-  it('returns active brands in order and returns an empty array when none exist', async () => {
-    const brands = { find: vi.fn().mockResolvedValueOnce([{ id: '1', name: 'Samsung', version: 1 }]).mockResolvedValueOnce([]) };
-    const service = new BrandsService(brands as never, {} as never);
-    expect(await service.findAll()).toEqual([expect.objectContaining({ id: '1', name: 'Samsung' })]);
-    expect(brands.find).toHaveBeenCalledWith({ where: { isActive: true }, order: { name: 'ASC', id: 'ASC' } });
-    expect(await service.findAll()).toEqual([]);
+  it('filters active brands and returns the requested page', async () => {
+    const query = { where: vi.fn(), andWhere: vi.fn(), orderBy: vi.fn(), addOrderBy: vi.fn(), skip: vi.fn(), take: vi.fn(), getManyAndCount: vi.fn() };
+    for (const method of [query.where, query.andWhere, query.orderBy, query.addOrderBy, query.skip, query.take]) method.mockReturnValue(query);
+    query.getManyAndCount.mockResolvedValueOnce([[{ id: '1', name: 'Samsung', version: 1, secret: 'hidden' }], 21]).mockResolvedValueOnce([[], 0]);
+    const service = new BrandsService({ createQueryBuilder: vi.fn().mockReturnValue(query) } as never, {} as never);
+    const result = await service.findAll({ page: '2', pageSize: '5', name: 'sam' });
+    expect(result).toMatchObject({ data: [{ id: '1', name: 'Samsung' }], total: 21, page: 2, totalPages: 5 });
+    expect(result.data[0]).not.toHaveProperty('secret');
+    expect(query.where).toHaveBeenCalledWith('brand.isActive = :active', { active: true });
+    expect(query.andWhere).toHaveBeenCalledWith("brand.name ILIKE :name ESCAPE '\\'", { name: '%sam%' });
+    expect(query.skip).toHaveBeenCalledWith(5);
+    expect(query.take).toHaveBeenCalledWith(5);
+    expect(await service.findAll()).toEqual({ data: [], total: 0, page: 1, totalPages: 0 });
+    await expect(service.findAll({ pageSize: '0' })).rejects.toBeInstanceOf(BadRequestException);
   });
 });
 
@@ -138,5 +149,51 @@ describe('BrandsService.remove', () => {
     await expect(service.remove('1', 'user-id')).rejects.toBeInstanceOf(ForbiddenException);
     brands.update.mockResolvedValueOnce({ affected: 0 });
     await expect(service.remove('1', 'user-id')).rejects.toBeInstanceOf(NotFoundException);
+  });
+});
+
+describe('BrandsService.createBulk', () => {
+  const repository = { create: vi.fn((value) => value), save: vi.fn() };
+  const brands = { manager: { transaction: vi.fn() } };
+  const users = { findOne: vi.fn() };
+  let service: BrandsService;
+
+  beforeEach(() => {
+    vi.resetAllMocks();
+    repository.create.mockImplementation((value) => value);
+    repository.save.mockImplementation(async (values) => values.map((value, i) => ({ ...value, id: String(i + 1), version: 1, secret: 'hidden' })));
+    brands.manager.transaction.mockImplementation(async (fn) => fn({ getRepository: () => repository }));
+    users.findOne.mockResolvedValue({ status: UserStatus.ACTIVE });
+    service = new BrandsService(brands as never, users as never);
+  });
+
+  it('creates all brands in one transaction and exposes only response fields', async () => {
+    const result = await service.createBulk('user-id', { brands: [{ name: ' Điện Máy ' }, { name: 'ASUS' }] });
+    expect(repository.save).toHaveBeenCalledWith([
+      { name: 'Điện Máy', slug: 'dien-may', createdBy: 'user-id' },
+      { name: 'ASUS', slug: 'asus', createdBy: 'user-id' },
+    ]);
+    expect(result).toHaveLength(2);
+    expect(result[0]).not.toHaveProperty('secret');
+    expect(brands.manager.transaction).toHaveBeenCalledOnce();
+  });
+
+  it('rejects duplicate slugs before writing', async () => {
+    await expect(service.createBulk('user-id', { brands: [{ name: 'Điện máy' }, { name: 'Dien may' }] })).rejects.toBeInstanceOf(ConflictException);
+    expect(brands.manager.transaction).not.toHaveBeenCalled();
+  });
+
+  it('rejects blocked users and maps database uniqueness errors', async () => {
+    users.findOne.mockResolvedValueOnce({ status: UserStatus.BLOCKED });
+    await expect(service.createBulk('user-id', { brands: [{ name: 'ASUS' }] })).rejects.toBeInstanceOf(ForbiddenException);
+    repository.save.mockRejectedValueOnce({ code: '23505', constraint: 'brands_slug_not_deleted_unique' });
+    await expect(service.createBulk('user-id', { brands: [{ name: 'ASUS' }] })).rejects.toBeInstanceOf(ConflictException);
+  });
+
+  it('validates the batch and each brand', async () => {
+    for (const brands of [[], [{ name: ' ' }], [null], Array.from({ length: 101 }, () => ({ name: 'A' }))]) {
+      expect((await validate(plainToInstance(CreateBrandsBulkDto, { brands }))).length).toBeGreaterThan(0);
+    }
+    expect(await validate(plainToInstance(CreateBrandsBulkDto, { brands: [{ name: 'ASUS' }] }))).toHaveLength(0);
   });
 });

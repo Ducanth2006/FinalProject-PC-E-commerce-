@@ -10,7 +10,7 @@ import { RolesGuard } from '@/common/guard/roles.guard';
 import { Roles } from '@/common/decorators/roles.decorator';
 import { roleEnum } from '../roles/enums/roles.enum';
 import { UserAddressResponseDto } from './dto/response-user-address.dto';
-import { PaginatedUserAddressDto } from './dto/paginated-user-address.dto';
+import { ApiPaginatedResponse } from '@/common/decorators/api-paginated-response.decorator';
 
 const ErrorResponse = (status: number, description: string, message: string | string[]) =>
   ApiResponse({ status, description, schema: { example: { statusCode: status, message, error: ({ 400: 'Bad Request', 401: 'Unauthorized', 403: 'Forbidden', 404: 'Not Found', 409: 'Conflict' })[status] } } });
@@ -43,7 +43,7 @@ export class UserAddressController {
   @ApiBearerAuth()
   @ApiOperation({ summary: 'List addresses for the authenticated user', description: 'Returns default addresses first, followed by the most recently created addresses.' })
   @PageQuery()
-  @ApiResponse({ status: 200, description: 'Paginated addresses; data is empty when no results match.', type: PaginatedUserAddressDto })
+  @ApiPaginatedResponse(UserAddressResponseDto, 'Paginated addresses; data is empty when no results match.')
   @AuthErrors()
   @ErrorResponse(400, 'Invalid page number.', 'page must be a positive integer')
   findAll(@Req() req: AuthenticatedUser, @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number) {
@@ -57,7 +57,7 @@ export class UserAddressController {
   @ApiOperation({ summary: 'List addresses as an administrator', description: 'Optionally filter by userId; omit it to list addresses for all users.' })
   @PageQuery()
   @ApiQuery({ name: 'userId', required: false, type: String, format: 'uuid', description: 'Filter addresses by user UUID.' })
-  @ApiResponse({ status: 200, description: 'Paginated addresses.', type: PaginatedUserAddressDto })
+  @ApiPaginatedResponse(UserAddressResponseDto, 'Paginated addresses.')
   @AuthErrors()
   @ErrorResponse(400, 'Invalid page number or userId.', 'Validation failed (uuid is expected)')
   @ErrorResponse(403, 'Administrator role required.', 'You do not have permission to access this resource.')

@@ -2,7 +2,7 @@ import jwtConfig from "../../../config/jwt.config";
 import { UserService } from "../../user/user.service";
 import { ConfigService, ConfigType } from '@nestjs/config';
 import { Strategy } from 'passport-jwt';
-declare const JwtStrategies_base: new (...args: [opt: import("passport-jwt").StrategyOptionsWithRequest] | [opt: import("passport-jwt").StrategyOptionsWithoutRequest]) => Strategy & {
+declare const JwtStrategies_base: new (...args: [opt: import("passport-jwt").StrategyOptionsWithoutRequest] | [opt: import("passport-jwt").StrategyOptionsWithRequest]) => Strategy & {
     validate(...args: any[]): unknown;
 };
 export declare class JwtStrategies extends JwtStrategies_base {

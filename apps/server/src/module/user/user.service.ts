@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Injectable,
   Logger,
   NotFoundException,
@@ -18,9 +19,12 @@ import { JwtAuthGuard } from '../auth/guard/jwt-auth.guard';
 import { isUUID } from 'class-validator';
 import { UpdateClientProfileDto } from './dto/update-client-profile.dto';
 import { FindUsersDto } from './dto/find-users.dto';
-import { PaginatedUserDto } from './dto/paginated-user.dto';
+import { PaginatedResponse } from '@/common/types/paginationResponse.type';
 import { UserStatus } from './enums/user-status.enum';
 import { roleEnum } from '../roles/enums/roles.enum';
+import { Role } from '../roles/entities/role.entity';
+import { requireActiveUser } from '@/common/utils/require-active-user';
+import { UpdateUserAccessDto } from './dto/update-user-access.dto';
 @Injectable()
 export class UserService {
   private readonly logger = new Logger(UserService.name);
@@ -121,7 +125,7 @@ export class UserService {
       .getOne();
   }
 
-  async findAll({ page = 1, search, role, gender, status }: FindUsersDto): Promise<PaginatedUserDto> {
+  async findAll({ page = 1, search, role, gender, status }: FindUsersDto): Promise<PaginatedResponse<UserResponseDto>> {
     if (!Number.isSafeInteger(page) || page < 1 || page > 214748365) {
       throw new BadRequestException('page must be a positive integer');
     }
@@ -226,8 +230,26 @@ export class UserService {
     }
   }
 
-  update(id: number, updateUserDto: string) {
-    return `This action updates a #${id} user`;
+  async updateAccess(id: string, actorId: string, dto: UpdateUserAccessDto): Promise<UserResponseDto> {
+    if (!isUUID(id)) throw new BadRequestException('User ID must be a UUID');
+    if (dto.roleId === undefined && dto.status === undefined) throw new BadRequestException('Cần cung cấp roleId hoặc status');
+    const actor = await requireActiveUser(this.repoUser, actorId);
+    if (actor.roleId !== roleEnum.ADMIN) throw new ForbiddenException('Chỉ admin được cập nhật quyền hoặc trạng thái');
+    return this.repoUser.manager.transaction(async (manager) => {
+      const users = manager.getRepository(User);
+      if (dto.roleId !== undefined) {
+        const role = await manager.getRepository(Role).findOne({ where: { id: dto.roleId, isActive: true } });
+        if (!role) throw new NotFoundException('Không tìm thấy vai trò đang hoạt động');
+      }
+      const changes: Partial<User> = { updatedBy: actorId };
+      if (dto.roleId !== undefined) changes.roleId = dto.roleId;
+      if (dto.status !== undefined) changes.status = dto.status;
+      if (dto.status === UserStatus.BLOCKED) changes.refreshTokenHash = null;
+      const result = await users.update({ id, isActive: true, deletedAt: IsNull() }, changes);
+      if (!result.affected) throw new NotFoundException('Không tìm thấy người dùng');
+      const user = await users.findOneByOrFail({ id });
+      return plainToInstance(UserResponseDto, user, { excludeExtraneousValues: true });
+    });
   }
 
   async remove(userId: string): Promise<void> {

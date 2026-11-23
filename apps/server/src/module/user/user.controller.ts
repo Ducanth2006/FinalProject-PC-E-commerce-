@@ -24,10 +24,12 @@ import { AuthenticatedUser } from '@/common/types/authenticated-user.type';
 import { UpdateClientProfileDto } from './dto/update-client-profile.dto';
 import { UserResponseDto } from './dto/response-user.dto';
 import { FindUsersDto } from './dto/find-users.dto';
-import { PaginatedUserDto } from './dto/paginated-user.dto';
+import { ApiPaginatedResponse } from '@/common/decorators/api-paginated-response.decorator';
 import { RolesGuard } from '@/common/guard/roles.guard';
 import { Roles } from '@/common/decorators/roles.decorator';
 import { roleEnum } from '../roles/enums/roles.enum';
+import { UpdateUserAccessDto } from './dto/update-user-access.dto';
+import { ActiveUserGuard } from '@/common/guard/active-user.guard';
 @Controller("user")
 export class UserController {
   constructor(private readonly userService: UserService) {}
@@ -42,11 +44,11 @@ export class UserController {
     return this.userService.create(createUserDto);
   }
   @Get()
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(JwtAuthGuard, ActiveUserGuard, RolesGuard)
   @Roles(roleEnum.ADMIN)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'List and search users as an administrator (10 per page)' })
-  @ApiResponse({ status: 200, type: PaginatedUserDto })
+  @ApiPaginatedResponse(UserResponseDto)
   @ApiResponse({ status: 400, description: 'Invalid search or filter parameters.' })
   @ApiResponse({ status: 401, description: 'Missing or invalid access token.' })
   @ApiResponse({ status: 403, description: 'Administrator role required.' })
@@ -55,7 +57,7 @@ export class UserController {
   }
 
   @Get(":id")
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, ActiveUserGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Find a user by ID' })
   @ApiParam({ name: 'id', format: 'uuid' })
@@ -68,7 +70,7 @@ export class UserController {
   }
 
   @Patch("me")
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, ActiveUserGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Update the authenticated user profile' })
   @ApiBody({ type: UpdateClientProfileDto })
@@ -81,8 +83,24 @@ export class UserController {
     return this.userService.updateClientProfile(req.user.userId, dto);
   }
 
+  @Patch(':id/access')
+  @UseGuards(JwtAuthGuard, ActiveUserGuard, RolesGuard)
+  @Roles(roleEnum.ADMIN)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Quản trị viên cập nhật vai trò hoặc trạng thái người dùng' })
+  @ApiParam({ name: 'id', format: 'uuid' })
+  @ApiBody({ type: UpdateUserAccessDto })
+  @ApiResponse({ status: 200, description: 'Cập nhật thành công.', type: UserResponseDto })
+  @ApiResponse({ status: 400, description: 'ID hoặc dữ liệu không hợp lệ.' })
+  @ApiResponse({ status: 401, description: 'Token không hợp lệ.' })
+  @ApiResponse({ status: 403, description: 'Chỉ admin đang hoạt động được phép thực hiện.' })
+  @ApiResponse({ status: 404, description: 'Không tìm thấy người dùng hoặc vai trò.' })
+  updateAccess(@Param('id', ParseUUIDPipe) id: string, @Req() req: AuthenticatedUser, @Body() dto: UpdateUserAccessDto) {
+    return this.userService.updateAccess(id, req.user.userId, dto);
+  }
+
   @Delete('me')
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(JwtAuthGuard, ActiveUserGuard, RolesGuard)
   @Roles(roleEnum.CLIENT)
   @ApiBearerAuth()
   @HttpCode(HttpStatus.NO_CONTENT)

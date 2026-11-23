@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, Req, UseGuards, HttpCode, HttpStatus } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, Req, UseGuards, HttpCode, HttpStatus, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiBody, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '@/module/auth/guard/jwt-auth.guard';
 import { RolesGuard } from '@/common/guard/roles.guard';
@@ -9,6 +9,9 @@ import { BrandResponseDto } from './dto/response-brand.dto';
 import { BrandsService } from './brands.service';
 import { CreateBrandDto } from './dto/create-brand.dto';
 import { UpdateBrandDto } from './dto/update-brand.dto';
+import { CreateBrandsBulkDto } from './dto/create-brands-bulk.dto';
+import { QueryBrandDto } from './dto/query-brand.dto';
+import { ApiPaginatedResponse } from '@/common/decorators/api-paginated-response.decorator';
 
 @ApiTags('Brands')
 @Controller('brands')
@@ -30,11 +33,27 @@ export class BrandsController {
     return this.brandsService.create(req.user.userId, createBrandDto);
   }
 
+  @Post('bulk')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(roleEnum.ADMIN, roleEnum.STAFF_OPERATION)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Tạo nhiều thương hiệu cùng lúc', description: 'Tất cả thương hiệu được lưu trong một transaction; nếu có lỗi thì không tạo thương hiệu nào.' })
+  @ApiBody({ type: CreateBrandsBulkDto })
+  @ApiResponse({ status: 201, description: 'Tạo thành công.', type: BrandResponseDto, isArray: true })
+  @ApiResponse({ status: 400, description: 'Danh sách hoặc tên không hợp lệ.' })
+  @ApiResponse({ status: 401, description: 'Token không hợp lệ.' })
+  @ApiResponse({ status: 403, description: 'Không có quyền hoặc tài khoản không hoạt động.' })
+  @ApiResponse({ status: 409, description: 'Tên hoặc slug trùng trong danh sách hoặc database.' })
+  createBulk(@Req() req: AuthenticatedUser, @Body() dto: CreateBrandsBulkDto) {
+    return this.brandsService.createBulk(req.user.userId, dto);
+  }
+
   @Get()
   @ApiOperation({ summary: 'Danh sách thương hiệu đang hoạt động' })
-  @ApiResponse({ status: 200, description: 'Danh sách thương hiệu, có thể rỗng.', type: BrandResponseDto, isArray: true })
-  findAll() {
-    return this.brandsService.findAll();
+  @ApiPaginatedResponse(BrandResponseDto, 'Danh sách thương hiệu phân trang.')
+  @ApiResponse({ status: 400, description: 'Tham số lọc hoặc phân trang không hợp lệ.' })
+  findAll(@Query() filters: QueryBrandDto) {
+    return this.brandsService.findAll(filters);
   }
 
   @Get(':id')

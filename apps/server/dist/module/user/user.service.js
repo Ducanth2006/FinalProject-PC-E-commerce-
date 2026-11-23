@@ -57,6 +57,8 @@ const response_user_dto_1 = require("./dto/response-user.dto");
 const class_validator_1 = require("class-validator");
 const user_status_enum_1 = require("./enums/user-status.enum");
 const roles_enum_1 = require("../roles/enums/roles.enum");
+const role_entity_1 = require("../roles/entities/role.entity");
+const require_active_user_1 = require("../../common/utils/require-active-user");
 let UserService = UserService_1 = class UserService {
     repoUser;
     logger = new common_1.Logger(UserService_1.name);
@@ -250,8 +252,34 @@ let UserService = UserService_1 = class UserService {
             throw error;
         }
     }
-    update(id, updateUserDto) {
-        return `This action updates a #${id} user`;
+    async updateAccess(id, actorId, dto) {
+        if (!(0, class_validator_1.isUUID)(id))
+            throw new common_1.BadRequestException('User ID must be a UUID');
+        if (dto.roleId === undefined && dto.status === undefined)
+            throw new common_1.BadRequestException('Cần cung cấp roleId hoặc status');
+        const actor = await (0, require_active_user_1.requireActiveUser)(this.repoUser, actorId);
+        if (actor.roleId !== roles_enum_1.roleEnum.ADMIN)
+            throw new common_1.ForbiddenException('Chỉ admin được cập nhật quyền hoặc trạng thái');
+        return this.repoUser.manager.transaction(async (manager) => {
+            const users = manager.getRepository(user_entity_1.User);
+            if (dto.roleId !== undefined) {
+                const role = await manager.getRepository(role_entity_1.Role).findOne({ where: { id: dto.roleId, isActive: true } });
+                if (!role)
+                    throw new common_1.NotFoundException('Không tìm thấy vai trò đang hoạt động');
+            }
+            const changes = { updatedBy: actorId };
+            if (dto.roleId !== undefined)
+                changes.roleId = dto.roleId;
+            if (dto.status !== undefined)
+                changes.status = dto.status;
+            if (dto.status === user_status_enum_1.UserStatus.BLOCKED)
+                changes.refreshTokenHash = null;
+            const result = await users.update({ id, isActive: true, deletedAt: (0, typeorm_2.IsNull)() }, changes);
+            if (!result.affected)
+                throw new common_1.NotFoundException('Không tìm thấy người dùng');
+            const user = await users.findOneByOrFail({ id });
+            return (0, class_transformer_1.plainToInstance)(response_user_dto_1.UserResponseDto, user, { excludeExtraneousValues: true });
+        });
     }
     async remove(userId) {
         const result = await this.repoUser.update({ id: userId, roleId: roles_enum_1.roleEnum.CLIENT, isActive: true, deletedAt: (0, typeorm_2.IsNull)() }, { isActive: false, deletedAt: () => 'CURRENT_TIMESTAMP', deletedBy: userId, updatedBy: userId, refreshTokenHash: null });

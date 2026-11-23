@@ -23,4 +23,8 @@ describe('BrandsController', () => {
   it('restricts deletion to administrators and operations staff', () => {
     expect(Reflect.getMetadata(ROLES_KEY, controller.remove)).toEqual([roleEnum.ADMIN, roleEnum.STAFF_OPERATION]);
   });
+
+  it('restricts bulk creation to administrators and operations staff', () => {
+    expect(Reflect.getMetadata(ROLES_KEY, controller.createBulk)).toEqual([roleEnum.ADMIN, roleEnum.STAFF_OPERATION]);
+  });
 });

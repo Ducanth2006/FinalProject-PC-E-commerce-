@@ -2,7 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { UserService } from './user.service';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { User } from './entities/user.entity';
-import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { validate } from 'class-validator';
 import { UpdateClientProfileDto } from './dto/update-client-profile.dto';
 import { UserGender } from './enums/gender.enum';
@@ -10,6 +10,9 @@ import { vi } from 'vitest';
 import { FindUsersDto } from './dto/find-users.dto';
 import { plainToInstance } from 'class-transformer';
 import { roleEnum } from '../roles/enums/roles.enum';
+import { UserStatus } from './enums/user-status.enum';
+import { UpdateUserAccessDto } from './dto/update-user-access.dto';
+import { Role } from '../roles/entities/role.entity';
 
 describe('findAll users', () => {
   it('applies search and filters, paginates by 10 and hides sensitive fields', async () => {
@@ -126,5 +129,40 @@ describe('visible user lookup', () => {
     expect(result).not.toHaveProperty('passwordHash');
     expect(result).not.toHaveProperty('refreshTokenHash');
     expect(repo.findOne).toHaveBeenLastCalledWith({ where: { id: 'client-id', isActive: true, status: 'ACTIVE' } });
+  });
+});
+
+describe('updateAccess', () => {
+  const id = '550e8400-e29b-41d4-a716-446655440000';
+  const users = { update: vi.fn(), findOneByOrFail: vi.fn() };
+  const roles = { findOne: vi.fn() };
+  const repo = { findOne: vi.fn(), manager: { transaction: vi.fn() } };
+  let service: UserService;
+  beforeEach(() => {
+    vi.resetAllMocks();
+    repo.findOne.mockResolvedValue({ id: 'admin', roleId: roleEnum.ADMIN, status: UserStatus.ACTIVE });
+    roles.findOne.mockResolvedValue({ id: roleEnum.STAFF_OPERATION });
+    users.update.mockResolvedValue({ affected: 1 });
+    users.findOneByOrFail.mockResolvedValue({ id, roleId: roleEnum.STAFF_OPERATION, status: UserStatus.BLOCKED, passwordHash: 'secret' });
+    repo.manager.transaction.mockImplementation(async (fn) => fn({ getRepository: (entity) => entity === Role ? roles : users }));
+    service = new UserService(repo as never);
+  });
+  it('updates role and status, records admin and clears refresh token on block', async () => {
+    const result = await service.updateAccess(id, 'admin', { roleId: roleEnum.STAFF_OPERATION, status: UserStatus.BLOCKED });
+    expect(users.update).toHaveBeenCalledWith(expect.objectContaining({ id, isActive: true }), { roleId: roleEnum.STAFF_OPERATION, status: UserStatus.BLOCKED, updatedBy: 'admin', refreshTokenHash: null });
+    expect(result).toMatchObject({ id, status: UserStatus.BLOCKED });
+    expect(result).not.toHaveProperty('passwordHash');
+  });
+  it('rejects unauthorized actors, missing roles and missing users', async () => {
+    repo.findOne.mockResolvedValueOnce({ roleId: roleEnum.STAFF_OPERATION, status: UserStatus.ACTIVE });
+    await expect(service.updateAccess(id, 'staff', { status: UserStatus.BLOCKED })).rejects.toBeInstanceOf(ForbiddenException);
+    roles.findOne.mockResolvedValueOnce(null);
+    await expect(service.updateAccess(id, 'admin', { roleId: roleEnum.ADMIN })).rejects.toBeInstanceOf(NotFoundException);
+    users.update.mockResolvedValueOnce({ affected: 0 });
+    await expect(service.updateAccess(id, 'admin', { status: UserStatus.ACTIVE })).rejects.toBeInstanceOf(NotFoundException);
+  });
+  it('validates enum values and requires at least one update', async () => {
+    expect((await validate(plainToInstance(UpdateUserAccessDto, { roleId: null, status: 'UNKNOWN' }))).length).toBe(2);
+    await expect(service.updateAccess(id, 'admin', {})).rejects.toBeInstanceOf(BadRequestException);
   });
 });

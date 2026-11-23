@@ -21,10 +21,12 @@ const swagger_1 = require("@nestjs/swagger");
 const update_client_profile_dto_1 = require("./dto/update-client-profile.dto");
 const response_user_dto_1 = require("./dto/response-user.dto");
 const find_users_dto_1 = require("./dto/find-users.dto");
-const paginated_user_dto_1 = require("./dto/paginated-user.dto");
+const api_paginated_response_decorator_1 = require("../../common/decorators/api-paginated-response.decorator");
 const roles_guard_1 = require("../../common/guard/roles.guard");
 const roles_decorator_1 = require("../../common/decorators/roles.decorator");
 const roles_enum_1 = require("../roles/enums/roles.enum");
+const update_user_access_dto_1 = require("./dto/update-user-access.dto");
+const active_user_guard_1 = require("../../common/guard/active-user.guard");
 let UserController = class UserController {
     userService;
     constructor(userService) {
@@ -41,6 +43,9 @@ let UserController = class UserController {
     }
     updateClientProfile(req, dto) {
         return this.userService.updateClientProfile(req.user.userId, dto);
+    }
+    updateAccess(id, req, dto) {
+        return this.userService.updateAccess(id, req.user.userId, dto);
     }
     remove(req) {
         return this.userService.remove(req.user.userId);
@@ -61,11 +66,11 @@ __decorate([
 ], UserController.prototype, "create", null);
 __decorate([
     (0, common_1.Get)(),
-    (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard, roles_guard_1.RolesGuard),
+    (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard, active_user_guard_1.ActiveUserGuard, roles_guard_1.RolesGuard),
     (0, roles_decorator_1.Roles)(roles_enum_1.roleEnum.ADMIN),
     (0, swagger_1.ApiBearerAuth)(),
     (0, swagger_1.ApiOperation)({ summary: 'List and search users as an administrator (10 per page)' }),
-    (0, swagger_1.ApiResponse)({ status: 200, type: paginated_user_dto_1.PaginatedUserDto }),
+    (0, api_paginated_response_decorator_1.ApiPaginatedResponse)(response_user_dto_1.UserResponseDto),
     (0, swagger_1.ApiResponse)({ status: 400, description: 'Invalid search or filter parameters.' }),
     (0, swagger_1.ApiResponse)({ status: 401, description: 'Missing or invalid access token.' }),
     (0, swagger_1.ApiResponse)({ status: 403, description: 'Administrator role required.' }),
@@ -76,7 +81,7 @@ __decorate([
 ], UserController.prototype, "findAll", null);
 __decorate([
     (0, common_1.Get)(":id"),
-    (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard),
+    (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard, active_user_guard_1.ActiveUserGuard),
     (0, swagger_1.ApiBearerAuth)(),
     (0, swagger_1.ApiOperation)({ summary: 'Find a user by ID' }),
     (0, swagger_1.ApiParam)({ name: 'id', format: 'uuid' }),
@@ -92,7 +97,7 @@ __decorate([
 ], UserController.prototype, "findOneForClient", null);
 __decorate([
     (0, common_1.Patch)("me"),
-    (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard),
+    (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard, active_user_guard_1.ActiveUserGuard),
     (0, swagger_1.ApiBearerAuth)(),
     (0, swagger_1.ApiOperation)({ summary: 'Update the authenticated user profile' }),
     (0, swagger_1.ApiBody)({ type: update_client_profile_dto_1.UpdateClientProfileDto }),
@@ -108,8 +113,28 @@ __decorate([
     __metadata("design:returntype", void 0)
 ], UserController.prototype, "updateClientProfile", null);
 __decorate([
+    (0, common_1.Patch)(':id/access'),
+    (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard, active_user_guard_1.ActiveUserGuard, roles_guard_1.RolesGuard),
+    (0, roles_decorator_1.Roles)(roles_enum_1.roleEnum.ADMIN),
+    (0, swagger_1.ApiBearerAuth)(),
+    (0, swagger_1.ApiOperation)({ summary: 'Quản trị viên cập nhật vai trò hoặc trạng thái người dùng' }),
+    (0, swagger_1.ApiParam)({ name: 'id', format: 'uuid' }),
+    (0, swagger_1.ApiBody)({ type: update_user_access_dto_1.UpdateUserAccessDto }),
+    (0, swagger_1.ApiResponse)({ status: 200, description: 'Cập nhật thành công.', type: response_user_dto_1.UserResponseDto }),
+    (0, swagger_1.ApiResponse)({ status: 400, description: 'ID hoặc dữ liệu không hợp lệ.' }),
+    (0, swagger_1.ApiResponse)({ status: 401, description: 'Token không hợp lệ.' }),
+    (0, swagger_1.ApiResponse)({ status: 403, description: 'Chỉ admin đang hoạt động được phép thực hiện.' }),
+    (0, swagger_1.ApiResponse)({ status: 404, description: 'Không tìm thấy người dùng hoặc vai trò.' }),
+    __param(0, (0, common_1.Param)('id', common_1.ParseUUIDPipe)),
+    __param(1, (0, common_1.Req)()),
+    __param(2, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, Object, update_user_access_dto_1.UpdateUserAccessDto]),
+    __metadata("design:returntype", void 0)
+], UserController.prototype, "updateAccess", null);
+__decorate([
     (0, common_1.Delete)('me'),
-    (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard, roles_guard_1.RolesGuard),
+    (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard, active_user_guard_1.ActiveUserGuard, roles_guard_1.RolesGuard),
     (0, roles_decorator_1.Roles)(roles_enum_1.roleEnum.CLIENT),
     (0, swagger_1.ApiBearerAuth)(),
     (0, common_1.HttpCode)(common_1.HttpStatus.NO_CONTENT),

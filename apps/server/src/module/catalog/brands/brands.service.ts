@@ -6,10 +6,15 @@ import { User } from '@/module/user/entities/user.entity';
 import { requireActiveUser } from '@/common/utils/require-active-user';
 import { validateBigintId } from '@/common/utils/validate-bigint-id';
 import { createSlug } from '../utils/create-slug';
+import { handleUniqueViolation } from '../utils/handle-unique-violation';
 import { Brand } from './entities/brand.entity';
 import { BrandResponseDto } from './dto/response-brand.dto';
 import { CreateBrandDto } from './dto/create-brand.dto';
 import { UpdateBrandDto } from './dto/update-brand.dto';
+import { CreateBrandsBulkDto } from './dto/create-brands-bulk.dto';
+import { QueryBrandDto } from './dto/query-brand.dto';
+import { parsePagination } from '@/common/utils/parse-pagination';
+import { PaginatedResponse } from '@/common/types/paginationResponse.type';
 
 @Injectable()
 export class BrandsService {
@@ -28,18 +33,41 @@ export class BrandsService {
       const saved = await this.brands.save(this.brands.create({ name, slug, createdBy: userId }));
       return plainToInstance(BrandResponseDto, saved, { excludeExtraneousValues: true });
     } catch (error) {
-      if (error && typeof error === 'object' && 'code' in error && 'constraint' in error &&
-          error.code === '23505' && (error.constraint === 'brands_name_not_deleted_unique' ||
-          error.constraint === 'brands_slug_not_deleted_unique')) {
-        throw new ConflictException('Tên hoặc slug thương hiệu đã được sử dụng');
-      }
-      throw error;
+      handleUniqueViolation(error, ['brands_name_not_deleted_unique', 'brands_slug_not_deleted_unique'], 'Tên hoặc slug thương hiệu đã được sử dụng');
     }
   }
 
-  async findAll(): Promise<BrandResponseDto[]> {
-    const brands = await this.brands.find({ where: { isActive: true }, order: { name: 'ASC', id: 'ASC' } });
-    return plainToInstance(BrandResponseDto, brands, { excludeExtraneousValues: true });
+  async createBulk(userId: string, dto: CreateBrandsBulkDto): Promise<BrandResponseDto[]> {
+    await requireActiveUser(this.users, userId);
+    const entries = dto.brands.map(({ name: inputName }) => {
+      const name = inputName.trim();
+      return { name, slug: createSlug(name), createdBy: userId };
+    });
+    if (new Set(entries.map((entry) => entry.slug)).size !== entries.length) {
+      throw new ConflictException('Các thương hiệu trong danh sách có tên hoặc slug trùng nhau');
+    }
+    try {
+      const saved = await this.brands.manager.transaction(async (manager) => {
+        const repository = manager.getRepository(Brand);
+        return repository.save(repository.create(entries));
+      });
+      return plainToInstance(BrandResponseDto, saved, { excludeExtraneousValues: true });
+    } catch (error) {
+      handleUniqueViolation(error, ['brands_name_not_deleted_unique', 'brands_slug_not_deleted_unique'], 'Tên hoặc slug thương hiệu đã được sử dụng');
+    }
+  }
+
+  async findAll(filters: QueryBrandDto = {}): Promise<PaginatedResponse<BrandResponseDto>> {
+    const { page, pageSize, skip } = parsePagination(filters.page, filters.pageSize);
+    const query = this.brands.createQueryBuilder('brand').where('brand.isActive = :active', { active: true });
+    const name = filters.name?.trim();
+    if (name) {
+      const escaped = name.replace(/[\\%_]/g, '\\$&');
+      query.andWhere("brand.name ILIKE :name ESCAPE '\\'", { name: `%${escaped}%` });
+    }
+    const [brands, total] = await query.orderBy('brand.name', 'ASC').addOrderBy('brand.id', 'ASC')
+      .skip(skip).take(pageSize).getManyAndCount();
+    return { data: plainToInstance(BrandResponseDto, brands, { excludeExtraneousValues: true }), total, page, totalPages: Math.ceil(total / pageSize) };
   }
 
   async findOneById(id: string): Promise<BrandResponseDto> {
@@ -71,12 +99,7 @@ export class BrandsService {
         return plainToInstance(BrandResponseDto, saved, { excludeExtraneousValues: true });
       });
     } catch (error) {
-      if (error && typeof error === 'object' && 'code' in error && 'constraint' in error &&
-          error.code === '23505' && (error.constraint === 'brands_name_not_deleted_unique' ||
-          error.constraint === 'brands_slug_not_deleted_unique')) {
-        throw new ConflictException('Tên hoặc slug thương hiệu đã được sử dụng');
-      }
-      throw error;
+      handleUniqueViolation(error, ['brands_name_not_deleted_unique', 'brands_slug_not_deleted_unique'], 'Tên hoặc slug thương hiệu đã được sử dụng');
     }
   }
 

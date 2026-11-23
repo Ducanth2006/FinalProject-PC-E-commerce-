@@ -6,6 +6,7 @@ import {
   JoinColumn,
   ManyToOne,
   PrimaryGeneratedColumn,
+  VersionColumn,
 } from "typeorm";
 
 @Entity("categories")
@@ -29,5 +30,8 @@ export class Category extends MetaDataEntity {
 
   @Column({ type: "varchar", length: 255 })
   slug: string;
+
+  @VersionColumn()
+  version: number;
 
 }
