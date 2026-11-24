@@ -24,6 +24,7 @@ const jwt_config_1 = __importDefault(require("./config/jwt.config"));
 const brands_module_1 = require("./module/catalog/brands/brands.module");
 const categories_module_1 = require("./module/catalog/categories/categories.module");
 const products_module_1 = require("./module/catalog/products/products.module");
+const product_promotions_module_1 = require("./module/catalog/product-promotions/product-promotions.module");
 const pc_bundle_components_module_1 = require("./module/pc-bundle-components/pc-bundle-components.module");
 let AppModule = class AppModule {
 };
@@ -55,6 +56,7 @@ exports.AppModule = AppModule = __decorate([
             brands_module_1.BrandsModule,
             categories_module_1.CategoriesModule,
             products_module_1.ProductsModule,
+            product_promotions_module_1.ProductPromotionsModule,
             pc_bundle_components_module_1.PcBundleComponentsModule,
         ],
     })

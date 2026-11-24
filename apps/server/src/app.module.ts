@@ -12,6 +12,7 @@ import jwtConfig from "./config/jwt.config";
 import { BrandsModule } from './module/catalog/brands/brands.module';
 import { CategoriesModule } from './module/catalog/categories/categories.module';
 import { ProductsModule } from './module/catalog/products/products.module';
+import { ProductPromotionsModule } from './module/catalog/product-promotions/product-promotions.module';
 import { PcBundleComponentsModule } from './module/pc-bundle-components/pc-bundle-components.module';
 @Module({
   imports: [
@@ -39,6 +40,7 @@ import { PcBundleComponentsModule } from './module/pc-bundle-components/pc-bundl
     BrandsModule,
     CategoriesModule,
     ProductsModule,
+    ProductPromotionsModule,
     PcBundleComponentsModule,
   ],
 })

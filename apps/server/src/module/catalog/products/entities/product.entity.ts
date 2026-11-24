@@ -7,8 +7,11 @@ import {
   Entity,
   Index,
   ManyToOne,
+  OneToMany,
   PrimaryGeneratedColumn,
 } from "typeorm";
+import { ProductImage } from "./product-image.entity";
+import { ProductPromotion } from "@/module/catalog/product-promotions/entities/product-promotion.entity";
 
 export enum ProductType {
   COMPONENT = "COMPONENT",
@@ -67,5 +70,11 @@ export class Product extends MetaDataEntity {
 
   @Column({ type: "bigint" })
   price: string;
+
+  @OneToMany(() => ProductImage, (productImage) => productImage.product)
+  images: ProductImage[];
+
+  @OneToMany(() => ProductPromotion, (promotion) => promotion.product)
+  promotions: ProductPromotion[];
 
 }
