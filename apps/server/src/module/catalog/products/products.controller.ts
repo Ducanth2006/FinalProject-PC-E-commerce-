@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, Req, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, Req, UseGuards, Query, ParseIntPipe } from '@nestjs/common';
 import { ApiBearerAuth, ApiBody, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { ProductsService } from './products.service';
 import { CreateProductDto } from './dto/create-product.dto';
@@ -9,6 +9,9 @@ import { RolesGuard } from '@/common/guard/roles.guard';
 import { Roles } from '@/common/decorators/roles.decorator';
 import { roleEnum } from '@/module/roles/enums/roles.enum';
 import { AuthenticatedUser } from '@/common/types/authenticated-user.type';
+import { QueryProductDto } from './dto/query-product.dto';
+import { ProductListItemDto } from './dto/product-list-item.dto';
+import { ApiPaginatedResponse } from '@/common/decorators/api-paginated-response.decorator';
 
 @ApiTags('Products')
 @Controller('products')
@@ -31,18 +34,34 @@ export class ProductsController {
   }
 
   @Get()
-  findAll() {
-    return this.productsService.findAll();
+  @ApiOperation({ summary: 'Danh sách sản phẩm đang hoạt động kèm ảnh đại diện' })
+  @ApiPaginatedResponse(ProductListItemDto, 'Danh sách product phân trang; chỉ trả ảnh đại diện.')
+  findAll(@Query() filters: QueryProductDto) {
+    return this.productsService.findAll(filters);
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.productsService.findOne(+id);
+  @ApiOperation({ summary: 'Lấy chi tiết sản phẩm kèm toàn bộ ảnh đang hoạt động' })
+  @ApiResponse({ status: 200, type: ProductResponseDto })
+  @ApiResponse({ status: 400, description: 'ID sản phẩm không hợp lệ.' })
+  @ApiResponse({ status: 404, description: 'Không tìm thấy sản phẩm đang hoạt động.' })
+  findOne(@Param('id', ParseIntPipe) id: number) {
+    return this.productsService.findOne(id);
   }
 
   @Patch(':id')
-  update(@Param('id') id: string, @Body() updateProductDto: UpdateProductDto) {
-    return this.productsService.update(+id, updateProductDto);
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(roleEnum.ADMIN, roleEnum.STAFF_OPERATION)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Update a product and manage its images' })
+  @ApiBody({ type: UpdateProductDto })
+  @ApiResponse({ status: 200, type: ProductResponseDto })
+  @ApiResponse({ status: 400, description: 'The product update payload is invalid.' })
+  @ApiResponse({ status: 403, description: 'The user is inactive, blocked, or lacks permission.' })
+  @ApiResponse({ status: 404, description: 'The product, category, or brand was not found.' })
+  @ApiResponse({ status: 409, description: 'The product slug or SKU is already in use.' })
+  update(@Req() req: AuthenticatedUser, @Param('id') id: string, @Body() updateProductDto: UpdateProductDto) {
+    return this.productsService.update(id, req.user.userId, updateProductDto);
   }
 
   @Delete(':id')

@@ -232,21 +232,21 @@ export class UserService {
 
   async updateAccess(id: string, actorId: string, dto: UpdateUserAccessDto): Promise<UserResponseDto> {
     if (!isUUID(id)) throw new BadRequestException('User ID must be a UUID');
-    if (dto.roleId === undefined && dto.status === undefined) throw new BadRequestException('Cần cung cấp roleId hoặc status');
+    if (dto.roleId === undefined && dto.status === undefined) throw new BadRequestException('Provide roleId or status');
     const actor = await requireActiveUser(this.repoUser, actorId);
-    if (actor.roleId !== roleEnum.ADMIN) throw new ForbiddenException('Chỉ admin được cập nhật quyền hoặc trạng thái');
+    if (actor.roleId !== roleEnum.ADMIN) throw new ForbiddenException('Only administrators can update roles or status');
     return this.repoUser.manager.transaction(async (manager) => {
       const users = manager.getRepository(User);
       if (dto.roleId !== undefined) {
         const role = await manager.getRepository(Role).findOne({ where: { id: dto.roleId, isActive: true } });
-        if (!role) throw new NotFoundException('Không tìm thấy vai trò đang hoạt động');
+        if (!role) throw new NotFoundException('Active role not found');
       }
       const changes: Partial<User> = { updatedBy: actorId };
       if (dto.roleId !== undefined) changes.roleId = dto.roleId;
       if (dto.status !== undefined) changes.status = dto.status;
       if (dto.status === UserStatus.BLOCKED) changes.refreshTokenHash = null;
       const result = await users.update({ id, isActive: true, deletedAt: IsNull() }, changes);
-      if (!result.affected) throw new NotFoundException('Không tìm thấy người dùng');
+      if (!result.affected) throw new NotFoundException('User not found');
       const user = await users.findOneByOrFail({ id });
       return plainToInstance(UserResponseDto, user, { excludeExtraneousValues: true });
     });

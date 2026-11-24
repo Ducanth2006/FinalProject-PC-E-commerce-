@@ -26,7 +26,7 @@ __decorate([
 __decorate([
     (0, swagger_1.ApiProperty)({ example: "ducanhdz123" }),
     (0, class_validator_1.IsString)(),
-    (0, class_validator_1.MinLength)(6, { message: 'Mật khẩu phải có ít nhất 6 ký tự' }),
+    (0, class_validator_1.MinLength)(6, { message: 'Password must be at least 6 characters long' }),
     __metadata("design:type", String)
 ], CreateUserDto.prototype, "password", void 0);
 //# sourceMappingURL=create-user.dto.js.map

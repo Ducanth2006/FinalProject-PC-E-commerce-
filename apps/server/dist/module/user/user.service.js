@@ -256,16 +256,16 @@ let UserService = UserService_1 = class UserService {
         if (!(0, class_validator_1.isUUID)(id))
             throw new common_1.BadRequestException('User ID must be a UUID');
         if (dto.roleId === undefined && dto.status === undefined)
-            throw new common_1.BadRequestException('Cần cung cấp roleId hoặc status');
+            throw new common_1.BadRequestException('Provide roleId or status');
         const actor = await (0, require_active_user_1.requireActiveUser)(this.repoUser, actorId);
         if (actor.roleId !== roles_enum_1.roleEnum.ADMIN)
-            throw new common_1.ForbiddenException('Chỉ admin được cập nhật quyền hoặc trạng thái');
+            throw new common_1.ForbiddenException('Only administrators can update roles or status');
         return this.repoUser.manager.transaction(async (manager) => {
             const users = manager.getRepository(user_entity_1.User);
             if (dto.roleId !== undefined) {
                 const role = await manager.getRepository(role_entity_1.Role).findOne({ where: { id: dto.roleId, isActive: true } });
                 if (!role)
-                    throw new common_1.NotFoundException('Không tìm thấy vai trò đang hoạt động');
+                    throw new common_1.NotFoundException('Active role not found');
             }
             const changes = { updatedBy: actorId };
             if (dto.roleId !== undefined)
@@ -276,7 +276,7 @@ let UserService = UserService_1 = class UserService {
                 changes.refreshTokenHash = null;
             const result = await users.update({ id, isActive: true, deletedAt: (0, typeorm_2.IsNull)() }, changes);
             if (!result.affected)
-                throw new common_1.NotFoundException('Không tìm thấy người dùng');
+                throw new common_1.NotFoundException('User not found');
             const user = await users.findOneByOrFail({ id });
             return (0, class_transformer_1.plainToInstance)(response_user_dto_1.UserResponseDto, user, { excludeExtraneousValues: true });
         });

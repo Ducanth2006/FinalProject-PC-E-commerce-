@@ -8,6 +8,6 @@ export class CreateBrandDto {
   })
   @IsDefined()
   @IsString()
-  @Matches(/\S/, { message: 'Tên thương hiệu không được để trống' })
+  @Matches(/\S/, { message: 'Brand name must not be blank' })
   name: string;
 }

@@ -7,9 +7,10 @@ import { ProductImage } from './entities/product-image.entity';
 import { Category } from '../categories/entities/category.entity';
 import { Brand } from '../brands/entities/brand.entity';
 import { User } from '@/module/user/entities/user.entity';
+import { ProductPromotionsModule } from '../product-promotions/product-promotions.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Product, ProductImage, Category, Brand, User])],
+  imports: [TypeOrmModule.forFeature([Product, ProductImage, Category, Brand, User]), ProductPromotionsModule],
   controllers: [ProductsController],
   providers: [ProductsService],
 })

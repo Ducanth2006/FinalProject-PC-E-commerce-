@@ -8,6 +8,6 @@ export class CreateUserDto {
     email:string;
     @ApiProperty({example:"ducanhdz123"})
     @IsString()
-    @MinLength(6, { message: 'Mật khẩu phải có ít nhất 6 ký tự' })
+    @MinLength(6, { message: 'Password must be at least 6 characters long' })
     password:string;
 }

@@ -6,7 +6,7 @@ export function createSlug(name: string): string {
     .replace(/^-+|-+$/g, '');
 
   if (!slug || slug.length > 255) {
-    throw new BadRequestException('Tên không tạo được slug hợp lệ (tối đa 255 ký tự)');
+    throw new BadRequestException('Name cannot produce a valid slug of at most 255 characters');
   }
   return slug;
 }

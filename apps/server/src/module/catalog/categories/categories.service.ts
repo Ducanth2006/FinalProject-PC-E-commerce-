@@ -30,16 +30,16 @@ export class CategoriesService {
     const slug = createSlug(name);
     const parentId = dto.parentId ?? null;
     if (parentId !== null) {
-      validateBigintId(parentId, 'ID danh mục cha');
+      validateBigintId(parentId, 'Parent category ID');
       const parent = await this.categories.findOne({ where: { id: parentId, isActive: true } });
-      if (!parent) throw new NotFoundException('Không tìm thấy danh mục cha đang hoạt động');
+      if (!parent) throw new NotFoundException('Active parent category not found');
     }
     try {
       const category = this.categories.create({ name, slug, parentId, createdBy: userId });
       const saved = await this.categories.save(category);
       return plainToInstance(CategoryResponseDto, saved, { excludeExtraneousValues: true });
     } catch (error) {
-      handleUniqueViolation(error, ['categories_slug_active_unique'], 'Slug danh mục đã được sử dụng');
+      handleUniqueViolation(error, ['categories_slug_active_unique'], 'Category slug is already in use');
     }
   }
 
@@ -47,15 +47,15 @@ export class CategoriesService {
     await requireActiveUser(this.users, userId);
     const entries = dto.categories.map(({ name: inputName, parentId }) => {
       const name = inputName.trim();
-      if (parentId != null) validateBigintId(parentId, 'ID danh mục cha');
+      if (parentId != null) validateBigintId(parentId, 'Parent category ID');
       return { name, slug: createSlug(name), parentId: parentId ?? null, createdBy: userId };
     });
     const names = entries.map(({ name }) => name.normalize('NFC').toLowerCase());
     if (new Set(names).size !== names.length) {
-      throw new ConflictException('Tên danh mục bị trùng trong danh sách');
+      throw new ConflictException('Category names are duplicated in the list');
     }
     if (new Set(entries.map(({ slug }) => slug)).size !== entries.length) {
-      throw new ConflictException('Slug danh mục bị trùng trong danh sách');
+      throw new ConflictException('Category slugs are duplicated in the list');
     }
     const parentIds = [...new Set(entries.flatMap(({ parentId }) => parentId === null ? [] : [parentId]))];
     try {
@@ -63,13 +63,13 @@ export class CategoriesService {
         const categories = manager.getRepository(Category);
         if (parentIds.length) {
           const parents = await categories.find({ where: { id: In(parentIds), isActive: true } });
-          if (parents.length !== parentIds.length) throw new NotFoundException('Không tìm thấy danh mục cha đang hoạt động');
+          if (parents.length !== parentIds.length) throw new NotFoundException('Active parent category not found');
         }
         return categories.save(categories.create(entries));
       });
       return plainToInstance(CategoryResponseDto, saved, { excludeExtraneousValues: true });
     } catch (error) {
-      handleUniqueViolation(error, ['categories_slug_active_unique'], 'Slug danh mục đã được sử dụng');
+      handleUniqueViolation(error, ['categories_slug_active_unique'], 'Category slug is already in use');
     }
   }
 
@@ -98,17 +98,17 @@ export class CategoriesService {
   }
 
   async findOne(id: string): Promise<CategoryResponseDto> {
-    validateBigintId(id, 'ID danh mục');
+    validateBigintId(id, 'Category ID');
     const category = await this.categories.findOne({ where: { id, isActive: true } });
-    if (!category) throw new NotFoundException('Không tìm thấy danh mục');
+    if (!category) throw new NotFoundException('Category not found');
     return plainToInstance(CategoryResponseDto, category, { excludeExtraneousValues: true });
   }
 
   async update(id: string, userId: string, dto: UpdateCategoryDto): Promise<CategoryResponseDto> {
-    validateBigintId(id, 'ID danh mục');
+    validateBigintId(id, 'Category ID');
     await requireActiveUser(this.users, userId);
-    if (dto.name === undefined && dto.parentId === undefined) throw new BadRequestException('Cần cung cấp tên hoặc danh mục cha');
-    if (dto.parentId != null) validateBigintId(dto.parentId, 'ID danh mục cha');
+    if (dto.name === undefined && dto.parentId === undefined) throw new BadRequestException('Provide a name or parent category');
+    if (dto.parentId != null) validateBigintId(dto.parentId, 'Parent category ID');
     const name = dto.name?.trim();
     const slug = name === undefined ? undefined : createSlug(name);
     try {
@@ -118,20 +118,20 @@ export class CategoriesService {
           await lockCategoryTree(manager);
         }
         if (dto.parentId != null) {
-          if (dto.parentId === id) throw new BadRequestException('Danh mục không thể là cha của chính nó');
+          if (dto.parentId === id) throw new BadRequestException('A category cannot be its own parent');
           const parent = await categories.findOne({ where: { id: dto.parentId, isActive: true }, lock: { mode: 'pessimistic_read' } });
-          if (!parent) throw new NotFoundException('Không tìm thấy danh mục cha đang hoạt động');
+          if (!parent) throw new NotFoundException('Active parent category not found');
           const cycle: unknown[] = await manager.query(
             'WITH RECURSIVE ancestors AS (SELECT id, parent_id FROM categories WHERE id = $1 UNION SELECT c.id, c.parent_id FROM categories c JOIN ancestors a ON c.id = a.parent_id) SELECT id FROM ancestors WHERE id = $2',
             [dto.parentId, id],
           );
-          if (cycle.length) throw new BadRequestException('Không thể chọn danh mục con làm danh mục cha');
+          if (cycle.length) throw new BadRequestException('A descendant cannot be selected as the parent');
         }
         if (name !== undefined) {
           const duplicate = await categories.createQueryBuilder('category')
             .where('category.isActive = :active AND category.id != :id', { active: true, id })
             .andWhere('LOWER(category.name) = LOWER(:name)', { name }).getOne();
-          if (duplicate) throw new ConflictException('Tên danh mục đã được sử dụng');
+          if (duplicate) throw new ConflictException('Category name is already in use');
         }
         const changes: { name?: string; slug?: string; parentId?: string | null; updatedBy: string; version: () => string } = {
           updatedBy: userId, version: () => '"version" + 1',
@@ -142,25 +142,25 @@ export class CategoriesService {
           .where('id = :id AND version = :version AND is_active = true AND deleted_at IS NULL', { id, version: dto.version }).execute();
         if (!result.affected) {
           const existing = await categories.findOne({ where: { id } });
-          if (!existing) throw new NotFoundException('Không tìm thấy danh mục');
-          if (!existing.isActive) throw new ConflictException('Danh mục không hoạt động');
-          throw new ConflictException('Phiên bản đã thay đổi, vui lòng tải lại');
+          if (!existing) throw new NotFoundException('Category not found');
+          if (!existing.isActive) throw new ConflictException('Category is inactive');
+          throw new ConflictException('Version has changed; please reload');
         }
         const saved = await categories.findOneByOrFail({ id });
         return plainToInstance(CategoryResponseDto, saved, { excludeExtraneousValues: true });
       });
     } catch (error) {
-      handleUniqueViolation(error, ['categories_slug_active_unique'], 'Tên hoặc slug danh mục đã được sử dụng');
+      handleUniqueViolation(error, ['categories_slug_active_unique'], 'Category name or slug is already in use');
     }
   }
 
   async remove(id: string, userId: string): Promise<void> {
-    validateBigintId(id, 'ID danh mục');
+    validateBigintId(id, 'Category ID');
     await requireActiveUser(this.users, userId);
     const result = await this.categories.update(
       { id, deletedAt: IsNull() },
       { deletedAt: () => 'CURRENT_TIMESTAMP', deletedBy: userId },
     );
-    if (!result.affected) throw new NotFoundException('Không tìm thấy danh mục');
+    if (!result.affected) throw new NotFoundException('Category not found');
   }
 }

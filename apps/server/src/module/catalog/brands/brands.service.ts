@@ -33,7 +33,7 @@ export class BrandsService {
       const saved = await this.brands.save(this.brands.create({ name, slug, createdBy: userId }));
       return plainToInstance(BrandResponseDto, saved, { excludeExtraneousValues: true });
     } catch (error) {
-      handleUniqueViolation(error, ['brands_name_not_deleted_unique', 'brands_slug_not_deleted_unique'], 'Tên hoặc slug thương hiệu đã được sử dụng');
+      handleUniqueViolation(error, ['brands_name_not_deleted_unique', 'brands_slug_not_deleted_unique'], 'Brand name or slug is already in use');
     }
   }
 
@@ -44,7 +44,7 @@ export class BrandsService {
       return { name, slug: createSlug(name), createdBy: userId };
     });
     if (new Set(entries.map((entry) => entry.slug)).size !== entries.length) {
-      throw new ConflictException('Các thương hiệu trong danh sách có tên hoặc slug trùng nhau');
+      throw new ConflictException('Brand names or slugs are duplicated in the list');
     }
     try {
       const saved = await this.brands.manager.transaction(async (manager) => {
@@ -53,7 +53,7 @@ export class BrandsService {
       });
       return plainToInstance(BrandResponseDto, saved, { excludeExtraneousValues: true });
     } catch (error) {
-      handleUniqueViolation(error, ['brands_name_not_deleted_unique', 'brands_slug_not_deleted_unique'], 'Tên hoặc slug thương hiệu đã được sử dụng');
+      handleUniqueViolation(error, ['brands_name_not_deleted_unique', 'brands_slug_not_deleted_unique'], 'Brand name or slug is already in use');
     }
   }
 
@@ -71,14 +71,14 @@ export class BrandsService {
   }
 
   async findOneById(id: string): Promise<BrandResponseDto> {
-    validateBigintId(id, 'ID thương hiệu');
+    validateBigintId(id, 'Brand ID');
     const brand = await this.brands.findOne({ where: { id, isActive: true } });
-    if (!brand) throw new NotFoundException('Không tìm thấy thương hiệu');
+    if (!brand) throw new NotFoundException('Brand not found');
     return plainToInstance(BrandResponseDto, brand, { excludeExtraneousValues: true });
   }
 
   async update(id: string, userId: string, dto: UpdateBrandDto): Promise<BrandResponseDto> {
-    validateBigintId(id, 'ID thương hiệu');
+    validateBigintId(id, 'Brand ID');
     await requireActiveUser(this.users, userId);
     const name = dto.name.trim();
     const slug = createSlug(name);
@@ -91,25 +91,25 @@ export class BrandsService {
             { id, version: dto.version }).execute();
         if (!result.affected) {
           const existing = await brands.findOne({ where: { id } });
-          if (!existing) throw new NotFoundException('Không tìm thấy thương hiệu');
-          if (!existing.isActive) throw new ConflictException('Thương hiệu không hoạt động');
-          throw new ConflictException('Phiên bản đã thay đổi, vui lòng tải lại');
+          if (!existing) throw new NotFoundException('Brand not found');
+          if (!existing.isActive) throw new ConflictException('Brand is inactive');
+          throw new ConflictException('Version has changed; please reload');
         }
         const saved = await brands.findOneByOrFail({ id });
         return plainToInstance(BrandResponseDto, saved, { excludeExtraneousValues: true });
       });
     } catch (error) {
-      handleUniqueViolation(error, ['brands_name_not_deleted_unique', 'brands_slug_not_deleted_unique'], 'Tên hoặc slug thương hiệu đã được sử dụng');
+      handleUniqueViolation(error, ['brands_name_not_deleted_unique', 'brands_slug_not_deleted_unique'], 'Brand name or slug is already in use');
     }
   }
 
   async remove(id: string, userId: string): Promise<void> {
-    validateBigintId(id, 'ID thương hiệu');
+    validateBigintId(id, 'Brand ID');
     await requireActiveUser(this.users, userId);
     const result = await this.brands.update(
       { id, deletedAt: IsNull() },
       { deletedAt: () => 'CURRENT_TIMESTAMP', deletedBy: userId },
     );
-    if (!result.affected) throw new NotFoundException('Không tìm thấy thương hiệu');
+    if (!result.affected) throw new NotFoundException('Brand not found');
   }
 }

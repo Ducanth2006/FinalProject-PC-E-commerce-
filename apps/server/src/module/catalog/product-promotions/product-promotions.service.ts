@@ -22,9 +22,25 @@ export class ProductPromotionsService {
     @InjectRepository(User) private readonly users: Repository<User>,
   ) {}
 
+  async getCurrentPrices(productIds: string[], now: Date): Promise<Map<string, string>> {
+    if (!productIds.length) return new Map();
+    const rows = await this.promotions.createQueryBuilder("promotion")
+      .select("promotion.productId", "productId")
+      .addSelect("promotion.salePrice", "salePrice")
+      .where("promotion.productId IN (:...productIds)", { productIds })
+      .andWhere("promotion.isActive = true")
+      .andWhere("promotion.startAt <= :now AND promotion.endAt > :now", { now })
+      .distinctOn(["promotion.productId"])
+      .orderBy("promotion.productId", "ASC")
+      .addOrderBy("promotion.startAt", "DESC")
+      .addOrderBy("promotion.id", "DESC")
+      .getRawMany<{ productId: string; salePrice: string }>();
+    return new Map(rows.map(({ productId, salePrice }) => [productId, salePrice]));
+  }
+
   async create(userId: string, dto: CreateProductPromotionDto): Promise<ProductPromotionResponseDto> {
     await requireActiveUser(this.users, userId);
-    validateBigintId(dto.productId, "ID sản phẩm");
+    validateBigintId(dto.productId, "Product ID");
     const startAt = new Date(dto.startAt);
     const endAt = new Date(dto.endAt);
     this.validatePeriod(startAt, endAt);
@@ -36,14 +52,14 @@ export class ProductPromotionsService {
         where: { id: dto.productId, isActive: true },
         lock: { mode: "pessimistic_write" },// tác dụng là khó product này lại đợi transaction commit or rôl back tránh 2 request tạo 2 promotion cùng 1 lúc  
       });
-      if (!product) throw new NotFoundException("Không tìm thấy sản phẩm đang hoạt động");
+      if (!product) throw new NotFoundException("Active product not found");
       this.validateSalePrice(dto.salePrice, product.price);
 
       const existing = await promotions.findOne({
         where: { productId: product.id, isActive: true, endAt: MoreThan(new Date()) },
       });
       if (existing) {
-        throw new ConflictException("Sản phẩm đã có promotion đang bật và chưa hết hạn");
+        throw new ConflictException("Product already has an active, unexpired promotion");
       }
 
       return promotions.save(promotions.create({
@@ -62,7 +78,7 @@ export class ProductPromotionsService {
     const query = this.promotions.createQueryBuilder("promotion")
       .where("promotion.isActive = :active", { active: true });
     if (filters.productId !== undefined) {
-      validateBigintId(filters.productId, "ID sản phẩm");
+      validateBigintId(filters.productId, "Product ID");
       query.andWhere("promotion.productId = :productId", { productId: filters.productId });
     }
     const productSlug = filters.productSlug?.trim();
@@ -88,7 +104,7 @@ export class ProductPromotionsService {
   async findOne(id: string): Promise<ProductPromotionResponseDto> {
     validateBigintId(id, "ID promotion");
     const promotion = await this.promotions.findOne({ where: { id, isActive: true } });
-    if (!promotion) throw new NotFoundException("Không tìm thấy promotion đang hoạt động");
+    if (!promotion) throw new NotFoundException("Active promotion not found");
     return plainToInstance(ProductPromotionResponseDto, promotion, { excludeExtraneousValues: true });
   }
 
@@ -99,15 +115,15 @@ export class ProductPromotionsService {
     const saved = await this.promotions.manager.transaction(async (manager) => {
       const promotions = manager.getRepository(ProductPromotion);
       const current = await promotions.findOne({ where: { id }, lock: { mode: "pessimistic_write" } });
-      if (!current) throw new NotFoundException("Không tìm thấy promotion");
-      if (!current.isActive) throw new ConflictException("Promotion không hoạt động");
+      if (!current) throw new NotFoundException("Promotion not found");
+      if (!current.isActive) throw new ConflictException("Promotion is inactive");
 
       const products = manager.getRepository(Product);
       const product = await products.findOne({
         where: { id: current.productId, isActive: true },
         lock: { mode: "pessimistic_write" },
       });
-      if (!product) throw new ConflictException("Sản phẩm của promotion không còn hoạt động");
+      if (!product) throw new ConflictException("The promotion's product is no longer active");
 
       const salePrice = dto.salePrice ?? current.salePrice;
       const startAt = dto.startAt === undefined ? current.startAt : new Date(dto.startAt);
@@ -121,7 +137,7 @@ export class ProductPromotionsService {
           where: { productId: product.id, isActive: true, endAt: MoreThan(new Date()), id: Not(id) },
         });
         if (other) {
-          throw new ConflictException("Sản phẩm đã có promotion đang bật và chưa hết hạn");
+          throw new ConflictException("Product already has an active, unexpired promotion");
         }
       }
 
@@ -136,7 +152,7 @@ export class ProductPromotionsService {
         id,
         version: dto.version,
       }).execute();
-      if (!result.affected) throw new ConflictException("Phiên bản promotion đã thay đổi, vui lòng tải lại");
+      if (!result.affected) throw new ConflictException("Promotion version has changed; please reload");
       return promotions.findOneByOrFail({ id });
     });
     return plainToInstance(ProductPromotionResponseDto, saved, { excludeExtraneousValues: true });
@@ -148,12 +164,12 @@ export class ProductPromotionsService {
     await this.promotions.manager.transaction(async (manager) => {
       const promotions = manager.getRepository(ProductPromotion);
       const promotion = await promotions.findOne({ where: { id }, lock: { mode: "pessimistic_write" } });
-      if (!promotion) throw new NotFoundException("Không tìm thấy promotion");
+      if (!promotion) throw new NotFoundException("Promotion not found");
       const product = await manager.getRepository(Product).findOne({
         where: { id: promotion.productId },
         lock: { mode: "pessimistic_write" },
       });
-      if (!product) throw new NotFoundException("Không tìm thấy sản phẩm của promotion");
+      if (!product) throw new NotFoundException("Promotion product not found");
       await promotions.update(
         { id, deletedAt: IsNull() },
         { deletedAt: () => "CURRENT_TIMESTAMP", deletedBy: userId, isActive: false },
@@ -163,13 +179,13 @@ export class ProductPromotionsService {
 
   private validateSalePrice(salePrice: string, productPrice: string): void {
     if (BigInt(salePrice) >= BigInt(productPrice)) {
-      throw new BadRequestException("Giá khuyến mãi phải thấp hơn giá sản phẩm");
+      throw new BadRequestException("Promotional price must be lower than the product price");
     }
   }
 
   private validatePeriod(startAt: Date, endAt: Date): void {
     if (Number.isNaN(startAt.getTime()) || Number.isNaN(endAt.getTime()) || startAt >= endAt) {
-      throw new BadRequestException("Thời gian promotion không hợp lệ: startAt phải trước endAt");
+      throw new BadRequestException("Invalid promotion period: startAt must be earlier than endAt");
     }
   }
 }

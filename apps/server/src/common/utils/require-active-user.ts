@@ -9,7 +9,7 @@ export async function requireActiveUser(users: Repository<User>, userId: string)
     where: { id: userId, isActive: true, deletedAt: IsNull() },
   });
   if (!user || user.status === UserStatus.BLOCKED) {
-    throw new ForbiddenException('Tài khoản không hoạt động, đã bị xóa hoặc bị khóa');
+    throw new ForbiddenException('Account is inactive, deleted, or blocked');
   }
   return user;
 }
