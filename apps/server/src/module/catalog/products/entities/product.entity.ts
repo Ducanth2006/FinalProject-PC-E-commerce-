@@ -9,6 +9,7 @@ import {
   ManyToOne,
   OneToMany,
   PrimaryGeneratedColumn,
+  VersionColumn,
 } from "typeorm";
 import { ProductImage } from "./product-image.entity";
 import { ProductPromotion } from "@/module/catalog/product-promotions/entities/product-promotion.entity";
@@ -44,6 +45,9 @@ export class Product extends MetaDataEntity {
   @Column({ type: "text" })
   name: string;
 
+  @Column({ type: "boolean", default: true })
+  display: boolean;
+
   @Column({ type: "enum", enum: ProductType })
   type: ProductType;
 
@@ -68,8 +72,14 @@ export class Product extends MetaDataEntity {
   @Column({ type: "numeric", precision: 2, scale: 1, nullable: true })
   rate: string | null;
 
+  @Column({ type: "int", nullable: true })
+  warrantyMonths: number | null;
+
   @Column({ type: "bigint" })
   price: string;
+
+  @VersionColumn()
+  version: number;
 
   @OneToMany(() => ProductImage, (productImage) => productImage.product)
   images: ProductImage[];

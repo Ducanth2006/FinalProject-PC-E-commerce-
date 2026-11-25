@@ -1,16 +1,18 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { plainToInstance } from 'class-transformer';
-import { In, IsNull, Repository } from 'typeorm';
+import { In, IsNull, QueryDeepPartialEntity, Repository } from 'typeorm';
 import { User } from '@/module/user/entities/user.entity';
 import { requireActiveUser } from '@/common/utils/require-active-user';
 import { createSlug } from '../utils/create-slug';
 import { handleUniqueViolation } from '../utils/handle-unique-violation';
 import { Brand } from '../brands/entities/brand.entity';
 import { Category } from '../categories/entities/category.entity';
-import { Product } from './entities/product.entity';
+import { Product, ProductType } from './entities/product.entity';
 import { ProductImage } from './entities/product-image.entity';
 import { ProductPromotion } from '../product-promotions/entities/product-promotion.entity';
+import { PcBundleComponent } from '@/module/pc-bundle-components/entities/pc-bundle-component.entity';
+import { sanitizeProductDescription } from './utils/sanitize-product-description';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { ProductResponseDto } from './dto/response-product.dto';
@@ -25,6 +27,7 @@ import { validateBigintId } from '@/common/utils/validate-bigint-id';
 export class ProductsService {
   constructor(
     @InjectRepository(Product) private readonly products: Repository<Product>,
+    @InjectRepository(PcBundleComponent) private readonly pcBundleComponents: Repository<PcBundleComponent>,
     @InjectRepository(ProductImage) private readonly productImages: Repository<ProductImage>,
     @InjectRepository(Category) private readonly categories: Repository<Category>,
     @InjectRepository(Brand) private readonly brands: Repository<Brand>,
@@ -59,11 +62,13 @@ export class ProductsService {
           name,
           slug,
           sku,
+          display: dto.display ?? true,
           type: dto.type,
           categoryId: category.id,
           brandId: brand.id,
           specs: dto.specs ?? {},
-          description: dto.description?.trim() || null,
+          warrantyMonths: dto.warrantyMonths ?? null,
+          description: dto.description ? sanitizeProductDescription(dto.description) || null : null,
           price: dto.price,
           createdBy: userId,
         }));
@@ -91,7 +96,8 @@ export class ProductsService {
     const query = this.products.createQueryBuilder('product')
       .innerJoin('product.category', 'category', 'category.isActive = true AND category.deletedAt IS NULL')
       .innerJoin('product.brand', 'brand', 'brand.isActive = true AND brand.deletedAt IS NULL')
-      .where('product.isActive = :active', { active: true });
+      .where('product.isActive = :active', { active: true })
+      .andWhere('product.display = :display', { display: true });
     const now = new Date();
 
     if (filters.createdAfter && filters.createdBefore &&
@@ -116,6 +122,82 @@ export class ProductsService {
     }
     if (filters.brandSlug?.trim()) {
       query.andWhere('brand.slug = :brandSlug', { brandSlug: filters.brandSlug.trim() });
+    }
+
+    const hasPcComponentFilter = Boolean(filters.cpu?.trim() || filters.gpu?.trim() || filters.minRamGb || filters.minStorageGb);
+    if (hasPcComponentFilter) {
+      if (filters.type && filters.type !== ProductType.PC_BUNDLE) {
+        throw new BadRequestException('CPU, GPU, RAM, and storage filters can only be used with PC_BUNDLE');
+      }
+      query.andWhere('product.type = :bundleType', { bundleType: ProductType.PC_BUNDLE });
+
+      for (const [filterValue, categorySlug, parameterName] of [
+        [filters.cpu?.trim(), 'cpu', 'cpuModel'],
+        [filters.gpu?.trim(), 'card-man-hinh', 'gpuModel'],
+      ] as const) {
+        if (!filterValue) continue;
+        const escapedFilterValue = filterValue.replace(/[\\%_]/g, '\\$&');
+        query.andWhere(`EXISTS (
+          SELECT 1
+          FROM pc_bundle_components bundle_component
+          INNER JOIN products component ON component.id = bundle_component.component_id
+          INNER JOIN categories component_category ON component_category.id = component.category_id
+          WHERE bundle_component.pc_id = product.id
+            AND bundle_component.is_active = true
+            AND bundle_component.deleted_at IS NULL
+            AND component.is_active = true
+            AND component.display = true
+            AND component.deleted_at IS NULL
+            AND component_category.is_active = true
+            AND component_category.deleted_at IS NULL
+            AND component_category.slug = '${categorySlug}'
+            AND (component.name ILIKE :${parameterName} ESCAPE '\\' OR component.specs->>'model' ILIKE :${parameterName} ESCAPE '\\')
+        )`, { [parameterName]: `%${escapedFilterValue}%` });
+      }
+
+      if (filters.minRamGb) {
+        query.andWhere(`(
+          SELECT COALESCE(SUM(
+            CASE WHEN component.specs->>'capacityGb' ~ '^[0-9]+$'
+              THEN (component.specs->>'capacityGb')::numeric * bundle_component.quantity
+              ELSE 0 END
+          ), 0)
+          FROM pc_bundle_components bundle_component
+          INNER JOIN products component ON component.id = bundle_component.component_id
+          INNER JOIN categories component_category ON component_category.id = component.category_id
+          WHERE bundle_component.pc_id = product.id
+            AND bundle_component.is_active = true
+            AND bundle_component.deleted_at IS NULL
+            AND component.is_active = true
+            AND component.display = true
+            AND component.deleted_at IS NULL
+            AND component_category.is_active = true
+            AND component_category.deleted_at IS NULL
+            AND component_category.slug = 'ram'
+        ) >= :minRamGb`, { minRamGb: filters.minRamGb });
+      }
+
+      if (filters.minStorageGb) {
+        query.andWhere(`(
+          SELECT COALESCE(SUM(
+            CASE WHEN component.specs->>'capacityGb' ~ '^[0-9]+$'
+              THEN (component.specs->>'capacityGb')::numeric * bundle_component.quantity
+              ELSE 0 END
+          ), 0)
+          FROM pc_bundle_components bundle_component
+          INNER JOIN products component ON component.id = bundle_component.component_id
+          INNER JOIN categories component_category ON component_category.id = component.category_id
+          WHERE bundle_component.pc_id = product.id
+            AND bundle_component.is_active = true
+            AND bundle_component.deleted_at IS NULL
+            AND component.is_active = true
+            AND component.display = true
+            AND component.deleted_at IS NULL
+            AND component_category.is_active = true
+            AND component_category.deleted_at IS NULL
+            AND component_category.slug IN ('ssd', 'hdd')
+        ) >= :minStorageGb`, { minStorageGb: filters.minStorageGb });
+      }
     }
 
     const currentPromotionExists = `EXISTS (
@@ -213,16 +295,15 @@ export class ProductsService {
     };
   }
 
-  async findOne(id: number): Promise<ProductResponseDto> {
-    if (!Number.isSafeInteger(id) || id <= 0) {
-      throw new BadRequestException('Product ID must be a valid positive integer');
-    }
+  async findOne(id: string): Promise<ProductResponseDto> {
+    validateBigintId(id,"Product ID")
 
     const product = await this.products.createQueryBuilder('product')
       .innerJoin('product.category', 'category', 'category.isActive = true AND category.deletedAt IS NULL')
       .innerJoin('product.brand', 'brand', 'brand.isActive = true AND brand.deletedAt IS NULL')
       .where('product.id = :id', { id })
       .andWhere('product.isActive = :active', { active: true })
+      .andWhere('product.display = :display', { display: true })
       .andWhere('product.deletedAt IS NULL')
       .getOne();
 
@@ -233,14 +314,37 @@ export class ProductsService {
       order: { isPrimary: 'DESC', displayOrder: 'ASC', id: 'ASC' },
     });
 
-    return plainToInstance(ProductResponseDto, { ...product, images }, { excludeExtraneousValues: true });
+    const components = product.type === ProductType.PC_BUNDLE
+      ? await this.pcBundleComponents.createQueryBuilder('bundleComponent')
+        .innerJoinAndSelect('bundleComponent.component', 'component')
+        .where('bundleComponent.pcId = :pcId', { pcId: product.id })
+        .andWhere('bundleComponent.isActive = true')
+        .andWhere('bundleComponent.deletedAt IS NULL')
+        .andWhere('component.isActive = true')
+        .andWhere('component.deletedAt IS NULL')
+        .orderBy('component.name', 'ASC')
+        .getMany()
+        .then((rows) => rows.map(({ component, quantity }) => ({
+          componentId: component.id,
+          name: component.name,
+          sku: component.sku,
+          specs: component.specs,
+          quantity,
+          warrantyMonths: component.warrantyMonths,
+        })))
+      : undefined;
+
+    return plainToInstance(ProductResponseDto, { ...product, images, components }, { excludeExtraneousValues: true });
   }
 
   async update(id: string, userId: string, dto: UpdateProductDto): Promise<ProductResponseDto> {
     validateBigintId(id, 'Product ID');
+    if (!Number.isInteger(dto.version) || dto.version < 1) {
+      throw new BadRequestException('Product version must be a positive integer');
+    }
     await requireActiveUser(this.users, userId);
 
-    // check nullable = array 
+    // check nullable by for of 
     const nullableInput = dto as UpdateProductDto & { [key: string]: unknown };
     for (const field of ['name', 'sku', 'type', 'categoryId', 'brandId', 'specs', 'price']) {
       if (nullableInput[field] === null) throw new BadRequestException(`${field} cannot be null`);
@@ -254,7 +358,9 @@ export class ProductsService {
       }
     }
     // check product field update and images update if don't have throw error 
-    const hasProductChanges = Object.entries(dto).some(([key, value]) => key !== 'images' && value !== undefined);
+    const hasProductChanges = Object.entries(dto).some(([key, value]) =>
+      key !== 'images' && key !== 'version' && value !== undefined,
+    );
     const hasImageChanges = dto.images !== undefined && dto.images.length > 0;
     if (!hasProductChanges && !hasImageChanges) {
       throw new BadRequestException('Provide at least one product field or image change');
@@ -282,9 +388,11 @@ export class ProductsService {
 
         const product = await products.findOne({
           where: { id, isActive: true, deletedAt: IsNull() },
-          lock: { mode: 'pessimistic_write' },
         });
         if (!product) throw new NotFoundException('Active product was not found');
+        if (product.version !== dto.version) {
+          throw new ConflictException('Product version has changed; please reload');
+        }
 
         const [category, brand] = await Promise.all([
           dto.categoryId === undefined ? Promise.resolve(null) : categories.findOne({
@@ -322,21 +430,29 @@ export class ProductsService {
             lock: { mode: 'pessimistic_write' },
           });
           const currentById = new Map(currentImages.map((image) => [image.id, image]));
-          const deleteIds = (dto.images ?? [])
-            .filter((image) => image.id && image.isDeleted === true)
-            .map((image) => image.id as string);
-          const referencedIds = imageIds.filter((imageId) => !deleteIds.includes(imageId));
-          if (referencedIds.some((imageId) => !currentById.has(imageId)) ||
-              deleteIds.some((imageId) => !currentById.has(imageId))) {
-            throw new BadRequestException('One or more image IDs are inactive or do not belong to this product');
+          const imagesToUpdate: NonNullable<UpdateProductDto['images']> = [];
+          const imagesToDelete: NonNullable<UpdateProductDto['images']> = [];
+          const imagesToCreate: NonNullable<UpdateProductDto['images']> = [];
+
+          for (const image of dto.images) {
+            if (image.isDeleted) imagesToDelete.push(image);
+            else if (image.id) imagesToUpdate.push(image);
+            else imagesToCreate.push(image);
           }
 
-          const oldPrimary = currentImages.find((image) => image.isPrimary);
-          const oldPrimaryOrder = oldPrimary ? { displayOrder: oldPrimary.displayOrder, id: oldPrimary.id } : null;
-          const deleteSet = new Set(deleteIds);
-          if (currentImages.length - deleteIds.length + (dto.images ?? []).filter((image) => !image.id && image.isDeleted !== true).length > 10) {
+          if ([...imagesToUpdate, ...imagesToDelete].some((image) => !currentById.has(image.id!))) {
+            throw new BadRequestException('One or more image IDs are inactive or do not belong to this product');
+          }
+          if (currentImages.length - imagesToDelete.length + imagesToCreate.length > 10) {
             throw new BadRequestException('A product cannot have more than 10 active images');
           }
+
+          const deleteIds = imagesToDelete.map((image) => image.id!);
+          const deleteSet = new Set(deleteIds);
+          const keptImages = currentImages.filter((image) => !deleteSet.has(image.id));
+          const requestedPrimary = [...imagesToUpdate, ...imagesToCreate].find((image) => image.isPrimary === true);
+
+          // Clear primary flags first so the partial unique index permits changing the primary image.
           if (currentImages.length) {
             await images.update(
               { productId: id, isActive: true, deletedAt: IsNull() },
@@ -350,54 +466,41 @@ export class ProductsService {
             );
           }
 
-          const payloadById = new Map((dto.images ?? []).filter((image) => image.id).map((image) => [image.id as string, image]));
-          const keptImages = currentImages.filter((image) => !deleteSet.has(image.id));
-          for (const image of keptImages) {
-            const change = payloadById.get(image.id);
+          const updatedImages = imagesToUpdate.map((input) => {
+            const image = currentById.get(input.id!)!;
+            if (input.imgUrl !== undefined) image.imgUrl = input.imgUrl.trim();
+            if (input.altText !== undefined) image.altText = input.altText === null ? null : input.altText.trim() || null;
+            if (input.displayOrder !== undefined) image.displayOrder = input.displayOrder;
             image.isPrimary = false;
             image.updatedBy = userId;
-            if (change?.imgUrl !== undefined) image.imgUrl = change.imgUrl.trim();
-            if (change && change.altText !== undefined) image.altText = change.altText === null ? null : change.altText.trim() || null;
-            if (change?.displayOrder !== undefined) image.displayOrder = change.displayOrder;
-          }
+            return image;
+          });
+          await images.save(updatedImages);
 
-          let nextOrder = currentImages.reduce((max, image) => Math.max(max, image.displayOrder), -1) + 1;
-          const newImageInputs = (dto.images ?? []).filter((image) => !image.id && image.isDeleted !== true);
-          const newImages = newImageInputs.map((image) => images.create({
+          const nextOrder = currentImages.reduce((max, image) => Math.max(max, image.displayOrder), -1) + 1;
+          const newImages = imagesToCreate.map((image, index) => images.create({
             productId: id,
             imgUrl: image.imgUrl!.trim(),
             altText: image.altText === undefined || image.altText === null ? null : image.altText.trim() || null,
             isPrimary: false,
-            displayOrder: image.displayOrder ?? nextOrder++,
+            displayOrder: image.displayOrder ?? nextOrder + index,
             createdBy: userId,
             updatedBy: userId,
           }));
-          const savedImages = await images.save([...keptImages, ...newImages]);
-          const savedById = new Map(savedImages.map((image) => [image.id, image]));
+          const createdImages = await images.save(newImages);
 
-          const requestedPrimary = (dto.images ?? []).find((image) => image.isDeleted !== true && image.isPrimary === true);
-          let primary = requestedPrimary?.id
-            ? savedById.get(requestedPrimary.id)
-            : requestedPrimary
-              ? savedImages[keptImages.length + newImageInputs.indexOf(requestedPrimary)]
-              : undefined;
-          const oldPrimaryChange = oldPrimary ? payloadById.get(oldPrimary.id) : undefined;
-          const oldPrimaryRemains = oldPrimary && !deleteSet.has(oldPrimary.id) && oldPrimaryChange?.isPrimary !== false;
-          if (!primary && oldPrimaryRemains) primary = savedById.get(oldPrimary.id);
-          if (!primary && savedImages.length) {
-            const ordered = [...savedImages].sort((left, right) => {
-              const orderDiff = left.displayOrder - right.displayOrder;
-              if (orderDiff !== 0) return orderDiff;
-              return BigInt(left.id) < BigInt(right.id) ? -1 : BigInt(left.id) > BigInt(right.id) ? 1 : 0;
+          let primaryImage: ProductImage | null | undefined;
+          if (requestedPrimary?.id) {
+            primaryImage = currentById.get(requestedPrimary.id);
+          } else if (requestedPrimary) {
+            primaryImage = createdImages[imagesToCreate.indexOf(requestedPrimary)];
+          } else {
+            primaryImage = await images.findOne({
+              where: { productId: id, isActive: true, deletedAt: IsNull() },
+              order: { displayOrder: 'DESC', id: 'DESC' },
             });
-            if (oldPrimaryOrder) {
-              primary = ordered.find((image) => image.displayOrder > oldPrimaryOrder.displayOrder ||
-                (image.displayOrder === oldPrimaryOrder.displayOrder && BigInt(image.id) > BigInt(oldPrimaryOrder.id))) ?? ordered[0];
-            } else {
-              primary = ordered[0];
-            }
           }
-          if (primary) await images.update({ id: primary.id, productId: id }, { isPrimary: true, updatedBy: userId });
+          if (primaryImage) await images.update({ id: primaryImage.id, productId: id }, { isPrimary: true, updatedBy: userId });
         }
 
         const changes: Partial<Product> = { updatedBy: userId };
@@ -407,13 +510,28 @@ export class ProductsService {
         }
         if (dto.sku !== undefined) changes.sku = dto.sku.trim();
         if (dto.type !== undefined) changes.type = dto.type;
+        if (dto.display !== undefined) changes.display = dto.display;
         if (category) changes.categoryId = category.id;
         if (brand) changes.brandId = brand.id;
         if (dto.specs !== undefined) changes.specs = dto.specs;
-        if (dto.description !== undefined) changes.description = dto.description === null ? null : dto.description.trim() || null;
+        if (dto.warrantyMonths !== undefined) changes.warrantyMonths = dto.warrantyMonths;
+        if (dto.description !== undefined) {
+          changes.description = dto.description === null ? null : sanitizeProductDescription(dto.description) || null;
+        }
         if (dto.price !== undefined) changes.price = dto.price;
 
-        const savedProduct = await products.save(products.merge(product, changes));
+        const updateResult = await products.createQueryBuilder()
+          .update(Product)
+          .set({ ...(changes as QueryDeepPartialEntity<Product>), version: () => '"version" + 1' })
+          .where('id = :id AND version = :version AND is_active = true AND deleted_at IS NULL', {
+            id,
+            version: dto.version,
+          })
+          .execute();
+        if (!updateResult.affected) {
+          throw new ConflictException('Product version has changed; please reload');
+        }
+        const savedProduct = await products.findOneByOrFail({ id });
         const activeImages = await images.find({
           where: { productId: id, isActive: true, deletedAt: IsNull() },
           order: { isPrimary: 'DESC', displayOrder: 'ASC', id: 'ASC' },
@@ -426,7 +544,38 @@ export class ProductsService {
     }
   }
 
-  remove(id: number) {
-    return `This action removes a #${id} product`;
+  async remove(id: string, userId: string): Promise<void> {
+    validateBigintId(id, 'Product ID');
+    await requireActiveUser(this.users, userId);
+
+    await this.products.manager.transaction(async (manager) => {
+      const products = manager.getRepository(Product);
+      const product = await products.findOne({
+        where: { id, deletedAt: IsNull() },
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (!product) throw new NotFoundException('Product not found');
+
+      const deletedAt = () => 'CURRENT_TIMESTAMP';
+      await products.update(
+        { id, deletedAt: IsNull() },
+        {
+          isActive: false,
+          display: false,
+          deletedAt,
+          deletedBy: userId,
+          updatedBy: userId,
+          version: () => '"version" + 1',
+        },
+      );
+      await manager.getRepository(ProductImage).update(
+        { productId: id, deletedAt: IsNull() },
+        { isActive: false, deletedAt, deletedBy: userId, updatedBy: userId },
+      );
+      await manager.getRepository(ProductPromotion).update(
+        { productId: id, deletedAt: IsNull() },
+        { isActive: false, deletedAt, deletedBy: userId, updatedBy: userId },
+      );
+    });
   }
 }

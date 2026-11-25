@@ -1,5 +1,5 @@
 import { OmitType, PartialType } from '@nestjs/mapped-types';
-import { ApiPropertyOptional } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import {
   ArrayMaxSize,
@@ -61,6 +61,12 @@ export class UpdateProductImageDto {
 class UpdateProductFieldsDto extends PartialType(OmitType(CreateProductDto, ['images'] as const)) {}
 
 export class UpdateProductDto extends UpdateProductFieldsDto {
+  @ApiPropertyOptional({ description: 'Phiên bản hiện tại của sản phẩm.', example: 1, minimum: 1 })
+  @IsDefined()
+  @IsInt()
+  @Min(1)
+  version: number;
+
   @ApiPropertyOptional({ type: [UpdateProductImageDto], maxItems: 10 })
   @IsOptional()
   @IsArray()

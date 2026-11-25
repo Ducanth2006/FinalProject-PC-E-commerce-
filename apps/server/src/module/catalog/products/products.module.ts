@@ -8,9 +8,10 @@ import { Category } from '../categories/entities/category.entity';
 import { Brand } from '../brands/entities/brand.entity';
 import { User } from '@/module/user/entities/user.entity';
 import { ProductPromotionsModule } from '../product-promotions/product-promotions.module';
+import { PcBundleComponent } from '@/module/pc-bundle-components/entities/pc-bundle-component.entity';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Product, ProductImage, Category, Brand, User]), ProductPromotionsModule],
+  imports: [TypeOrmModule.forFeature([Product, ProductImage, Category, Brand, User, PcBundleComponent]), ProductPromotionsModule],
   controllers: [ProductsController],
   providers: [ProductsService],
 })

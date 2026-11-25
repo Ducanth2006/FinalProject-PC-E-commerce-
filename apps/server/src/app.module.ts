@@ -14,6 +14,7 @@ import { CategoriesModule } from './module/catalog/categories/categories.module'
 import { ProductsModule } from './module/catalog/products/products.module';
 import { ProductPromotionsModule } from './module/catalog/product-promotions/product-promotions.module';
 import { PcBundleComponentsModule } from './module/pc-bundle-components/pc-bundle-components.module';
+import { InventoryModule } from './module/inventory/inventory.module';
 @Module({
   imports: [
     ConfigModule.forRoot({
@@ -42,6 +43,7 @@ import { PcBundleComponentsModule } from './module/pc-bundle-components/pc-bundl
     ProductsModule,
     ProductPromotionsModule,
     PcBundleComponentsModule,
+    InventoryModule,
   ],
 })
 export class AppModule {}

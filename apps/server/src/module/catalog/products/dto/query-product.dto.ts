@@ -30,6 +30,22 @@ export class QueryProductDto {
   @IsOptional() @IsString() @Matches(/\S/) @MaxLength(255)
   brandSlug?: string;
 
+  @ApiPropertyOptional({ description: "Lọc PC bundle theo tên/model CPU.", example: "Ryzen 5 5500" })
+  @IsOptional() @IsString() @Matches(/\S/) @MaxLength(255)
+  cpu?: string;
+
+  @ApiPropertyOptional({ description: "Lọc PC bundle theo tên/model GPU.", example: "RTX 5050" })
+  @IsOptional() @IsString() @Matches(/\S/) @MaxLength(255)
+  gpu?: string;
+
+  @ApiPropertyOptional({ description: "Dung lượng RAM tối thiểu của PC bundle, đơn vị GB.", example: "32" })
+  @IsOptional() @IsString() @Matches(/^[1-9]\d*$/) @MaxLength(6)
+  minRamGb?: string;
+
+  @ApiPropertyOptional({ description: "Dung lượng SSD/HDD tối thiểu của PC bundle, đơn vị GB.", example: "1000" })
+  @IsOptional() @IsString() @Matches(/^[1-9]\d*$/) @MaxLength(6)
+  minStorageGb?: string;
+
   @ApiPropertyOptional({ description: "true: có promotion đang hiệu lực; false: không có.", enum: ["true", "false"] })
   @IsOptional() @IsString() @IsIn(["true", "false"])
   hasPromotion?: "true" | "false";

@@ -4,12 +4,15 @@ import {
   ArrayMaxSize,
   ArrayMinSize,
   IsArray,
+  IsBoolean,
   IsDefined,
   IsEnum,
+  IsInt,
   IsObject,
   IsOptional,
   IsString,
   Matches,
+  Min,
   MaxLength,
   ValidateIf,
   ValidateNested,
@@ -32,6 +35,11 @@ export class CreateProductDto {
   @MaxLength(255)
   sku: string;
 
+  @ApiPropertyOptional({ description: "Hiển thị sản phẩm trên cửa hàng.", default: true })
+  @IsOptional()
+  @IsBoolean()
+  display?: boolean;
+
   @ApiProperty({ enum: ProductType, example: ProductType.COMPONENT })
   @IsDefined()
   @IsEnum(ProductType)
@@ -51,10 +59,16 @@ export class CreateProductDto {
   @MaxLength(19)
   brandId: string;
 
-  @ApiPropertyOptional({ description: "Thông số sản phẩm theo từng loại hàng.", type: "object", additionalProperties: true, example: { memory: "12GB GDDR7" } })
+  @ApiPropertyOptional({ description: "Thông số linh kiện; các field tùy theo category, số liệu dung lượng lưu dạng number theo GB.", type: "object", additionalProperties: true, example: { model: "ZOTAC GeForce RTX 5050", chipset: "RTX 5050", vramGb: 8 } })
   @ValidateIf((_object, value) => value !== undefined)
   @IsObject()
   specs?: Record<string, unknown>;
+
+  @ApiPropertyOptional({ description: "Thời hạn bảo hành tính theo tháng.", example: 36, minimum: 1, nullable: true })
+  @ValidateIf((_object, value) => value !== undefined && value !== null)
+  @IsInt()
+  @Min(1)
+  warrantyMonths?: number | null;
 
   @ApiPropertyOptional({ description: "Mô tả sản phẩm.", nullable: true })
   @ValidateIf((_object, value) => value !== undefined && value !== null)

@@ -1,4 +1,9 @@
-import { PartialType } from '@nestjs/mapped-types';
-import { CreatePcBundleComponentDto } from './create-pc-bundle-component.dto';
+import { ApiPropertyOptional } from '@nestjs/swagger';
+import { IsInt, IsOptional, Max, Min } from 'class-validator';
 
-export class UpdatePcBundleComponentDto extends PartialType(CreatePcBundleComponentDto) {}
+export class UpdatePcBundleComponentDto {
+  @ApiPropertyOptional({ example: 2, minimum: 1, maximum: 100 })
+  @IsOptional() @IsInt() @Min(1) @Max(100)
+  quantity?: number;
+
+}

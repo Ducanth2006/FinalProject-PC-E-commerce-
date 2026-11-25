@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, Req, UseGuards, Query, ParseIntPipe } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, Req, UseGuards, Query, HttpCode, HttpStatus } from '@nestjs/common';
 import { ApiBearerAuth, ApiBody, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { ProductsService } from './products.service';
 import { CreateProductDto } from './dto/create-product.dto';
@@ -45,7 +45,7 @@ export class ProductsController {
   @ApiResponse({ status: 200, type: ProductResponseDto })
   @ApiResponse({ status: 400, description: 'ID sản phẩm không hợp lệ.' })
   @ApiResponse({ status: 404, description: 'Không tìm thấy sản phẩm đang hoạt động.' })
-  findOne(@Param('id', ParseIntPipe) id: number) {
+  findOne(@Param('id') id: string) {
     return this.productsService.findOne(id);
   }
 
@@ -65,7 +65,17 @@ export class ProductsController {
   }
 
   @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.productsService.remove(+id);
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(roleEnum.ADMIN, roleEnum.STAFF_OPERATION)
+  @ApiBearerAuth()
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({ summary: 'Xóa mềm sản phẩm' })
+  @ApiResponse({ status: 204, description: 'Xóa mềm sản phẩm thành công.' })
+  @ApiResponse({ status: 400, description: 'ID sản phẩm không hợp lệ.' })
+  @ApiResponse({ status: 401, description: 'Token không hợp lệ.' })
+  @ApiResponse({ status: 403, description: 'Không có quyền hoặc tài khoản không hoạt động.' })
+  @ApiResponse({ status: 404, description: 'Không tìm thấy sản phẩm hoặc sản phẩm đã bị xóa.' })
+  remove(@Param('id') id: string, @Req() req: AuthenticatedUser) {
+    return this.productsService.remove(id, req.user.userId);
   }
 }

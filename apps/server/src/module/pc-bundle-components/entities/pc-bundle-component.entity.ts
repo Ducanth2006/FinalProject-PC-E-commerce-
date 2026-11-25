@@ -6,20 +6,27 @@ import {
   Entity,
   Index,
   ManyToOne,
-  PrimaryColumn,
+  PrimaryGeneratedColumn,
 } from "typeorm";
 
 @Entity("pc_bundle_components")
 @Index("pc_bundle_components_component_id_idx", ["componentId"])
+@Index("pc_bundle_components_active_pair_unique", ["pcId", "componentId"], {
+  unique: true,
+  where: '"deleted_at" IS NULL AND "is_active" = true',
+})
 @Check("pc_bundle_components_quantity_positive", '"quantity" > 0')
 export class PcBundleComponent extends MetaDataEntity {
-  @PrimaryColumn({ type: "bigint" })
+  @PrimaryGeneratedColumn("increment", { type: "bigint" })
+  id: string;
+
+  @Column({ type: "bigint" })
   pcId: string;
 
   @ManyToOne(() => Product, { nullable: false })
   pc: Product;
 
-  @PrimaryColumn({ type: "bigint" })
+  @Column({ type: "bigint" })
   componentId: string;
 
   @ManyToOne(() => Product, { nullable: false })
